@@ -66,7 +66,7 @@
   "engines": {
     "node": ">= 22.11.0"
   },
-  "description": "This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).",
+  "description": "Peyara Remote Mouse - turn your phone into a wireless mouse and keyboard for Windows/Linux/Mac.",
   "main": "index.js",
   "keywords": [],
   "author": "",
