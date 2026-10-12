@@ -15,10 +15,6 @@ export function getServers(): string[] {
       if (!Array.isArray(parsedServers)) {
         throw new Error('bad store');
       }
-      // TEMP-TEST-HARNESS-REMOVE-ME: seed stub server for on-device testing
-      if (__DEV__ && parsedServers.length === 0) {
-        return [`http://127.0.0.1:51337${QRCODE_SECRET}StubPC`];
-      }
       return parsedServers;
     } catch {
       setValueFor(SERVER_KEY, JSON.stringify([]));

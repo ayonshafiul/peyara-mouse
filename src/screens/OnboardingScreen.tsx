@@ -15,13 +15,16 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import colors from '../constants/colors';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {setBooleanValueFor} from '../utils/storage';
-import {SETTINGS_ONBOARDING_SHOW_FIRST_TIME} from '../constants/settings';
+import {
+  SERVER_DOWNLOAD_LINK,
+  SETTINGS_ONBOARDING_SHOW_FIRST_TIME,
+} from '../constants/settings';
 import Orientation from 'react-native-orientation-locker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 
 const WIDTH = Dimensions.get('window').width;
-const SERVER_LINK = 'https://peyara-remote-mouse.vercel.app';
+const SERVER_LINK = SERVER_DOWNLOAD_LINK;
 
 function DownloadServer() {
   const openLink = () => {

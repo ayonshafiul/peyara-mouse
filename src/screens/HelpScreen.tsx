@@ -176,6 +176,47 @@ function SendClipboard() {
   return <MaterialIcons name="content-paste" size={48} color={colors.WHITE} />;
 }
 
+function AdjustTouchSettings() {
+  return (
+    <View style={settingsStyles.container}>
+      <View style={settingsStyles.row}>
+        <MaterialIcons name="speed" size={32} color={colors.WHITE} />
+        <Text style={settingsStyles.rowText}>
+          Touch speed (Touchpad Sensitivity)
+        </Text>
+      </View>
+      <View style={settingsStyles.row}>
+        <MaterialIcons name="swap-vert" size={32} color={colors.WHITE} />
+        <Text style={settingsStyles.rowText}>
+          Scroll speed (Scroll Sensitivity)
+        </Text>
+      </View>
+      <View style={settingsStyles.row}>
+        <MaterialIcons name="timer" size={32} color={colors.WHITE} />
+        <Text style={settingsStyles.rowText}>
+          Touch response rate (Response Rate)
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const settingsStyles = StyleSheet.create({
+  container: {
+    gap: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rowText: {
+    color: colors.WHITE,
+    fontSize: 15,
+    fontFamily: 'Raleway-Regular',
+  },
+});
+
 const steps = [
   {
     label: 'Move the desktop cursor with your finger',
@@ -209,6 +250,10 @@ const steps = [
     label: 'Send and receive clipboard text with your PC',
     component: <SendClipboard />,
   },
+  {
+    label: 'Adjust touch speed, scroll speed and response rate from Settings',
+    component: <AdjustTouchSettings />,
+  },
 ];
 
 type Props = NativeStackScreenProps<TouchpadStackParamList, 'TouchpadHelp'>;
@@ -222,6 +267,12 @@ export default function HelpScreen({navigation}: Props) {
         index,
         animated: true,
       });
+    } else if (navigation.canGoBack()) {
+      // Return to the existing TouchpadScreen instance so the live socket
+      // connection and its params are left untouched. Re-navigating with
+      // fresh (empty) params risks dropping the connection and blanking
+      // the touchpad, which only renders when status === 'Connected'.
+      navigation.goBack();
     } else {
       navigation.navigate('TouchpadScreen', {});
     }

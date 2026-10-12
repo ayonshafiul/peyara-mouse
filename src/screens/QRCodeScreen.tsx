@@ -1,15 +1,25 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Alert, StyleSheet, Text, View, ActivityIndicator} from 'react-native';
+import {
+  Alert,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Camera, useCameraPermission} from 'react-native-vision-camera';
 import {
   useBarcodeScannerOutput,
   type Barcode,
 } from 'react-native-vision-camera-barcode-scanner';
+import Clipboard from '@react-native-clipboard/clipboard';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../constants/colors';
+import {SERVER_DOWNLOAD_LINK} from '../constants/settings';
 import {addServer} from '../utils/servers';
 import AppButton from '../components/AppButton';
-import QrCodeRectangleIcon from '../../assets/svg/qr-code-rectangle.svg';
 import Orientation from 'react-native-orientation-locker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/RootNavigator';
@@ -65,6 +75,15 @@ export default function QRCodeScreen({navigation}: Props) {
     console.error('Barcode scanner error:', error);
   }, []);
 
+  const openServerDownloadLink = useCallback(() => {
+    Linking.openURL(SERVER_DOWNLOAD_LINK);
+  }, []);
+
+  const copyServerDownloadLink = useCallback(() => {
+    Clipboard.setString(SERVER_DOWNLOAD_LINK);
+    Alert.alert('Link Copied');
+  }, []);
+
   // NOTE: we intentionally pass device="back" as a string instead of
   // useCameraDevice('back'): the device factory loads asynchronously, and
   // resolving the position natively avoids throwing while it initializes.
@@ -88,16 +107,13 @@ export default function QRCodeScreen({navigation}: Props) {
     <SafeAreaView style={styles.container}>
       <View style={styles.innerContainer}>
         {!scanned && !loading && (
-          <>
-            <Camera
-              style={styles.barcodeContainer}
-              device="back"
-              isActive={active}
-              outputs={[barcodeOutput]}
-              onError={onError}
-            />
-            <QrCodeRectangleIcon style={styles.qrCode} />
-          </>
+          <Camera
+            style={styles.barcodeContainer}
+            device="back"
+            isActive={active}
+            outputs={[barcodeOutput]}
+            onError={onError}
+          />
         )}
         {loading && (
           <ActivityIndicator size={'large'} color={colors.PRIM_ACCENT} />
@@ -115,6 +131,25 @@ export default function QRCodeScreen({navigation}: Props) {
           }}
         />
       )}
+      <View style={styles.downloadContainer}>
+        <Text style={styles.downloadPrompt}>
+          Download the server app on your desktop and open to see the QR code.
+        </Text>
+        <Text style={styles.linkText} onPress={openServerDownloadLink}>
+          {SERVER_DOWNLOAD_LINK}
+        </Text>
+        <TouchableOpacity
+          style={styles.copyButton}
+          onPress={copyServerDownloadLink}
+          activeOpacity={0.8}>
+          <MaterialIcons
+            name="content-copy"
+            size={16}
+            color={colors.PRIM_ACCENT}
+          />
+          <Text style={styles.copyButtonText}>Copy link</Text>
+        </TouchableOpacity>
+      </View>
       <AppButton text={'Cancel'} onPress={() => navigation.goBack()} />
     </SafeAreaView>
   );
@@ -128,19 +163,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   innerContainer: {
-    position: 'relative',
     width: 320,
     height: 320,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  qrCode: {
-    position: 'absolute',
-    top: 15,
-    left: 15,
-    zIndex: -1,
-    width: 280,
-    height: 280,
   },
   barcodeContainer: {
     width: 280,
@@ -149,6 +175,38 @@ const styles = StyleSheet.create({
   text: {
     color: colors.WHITE,
     marginBottom: 12,
+    fontFamily: 'Raleway-Regular',
+  },
+  downloadContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+    paddingTop: 16,
+    paddingHorizontal: 24,
+  },
+  downloadPrompt: {
+    color: colors.WHITE,
+    textAlign: 'center',
+    fontFamily: 'Raleway-Regular',
+  },
+  linkText: {
+    color: colors.PRIM_FRONT,
+    marginTop: 8,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    fontFamily: 'Raleway-Regular',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: colors.TOUCHPAD,
+  },
+  copyButtonText: {
+    color: colors.PRIM_ACCENT,
     fontFamily: 'Raleway-Regular',
   },
 });

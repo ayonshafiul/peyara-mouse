@@ -1,10 +1,23 @@
 import React, {useEffect, useState} from 'react';
-import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import colors from '../constants/colors';
 import {getServers, setServers} from '../utils/servers';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import {QRCODE_SECRET, SERVER_URL_KEY} from '../constants/settings';
+import Clipboard from '@react-native-clipboard/clipboard';
+import {
+  QRCODE_SECRET,
+  SERVER_DOWNLOAD_LINK,
+  SERVER_URL_KEY,
+} from '../constants/settings';
 import {setValueFor} from '../utils/storage';
 import Background from '../components/Background';
 import MouseMove from '../components/MouseMove';
@@ -64,6 +77,15 @@ export default function HomeScreen({navigation}: Props) {
     });
   };
 
+  const openServerDownloadLink = () => {
+    Linking.openURL(SERVER_DOWNLOAD_LINK);
+  };
+
+  const copyServerDownloadLink = () => {
+    Clipboard.setString(SERVER_DOWNLOAD_LINK);
+    Alert.alert('Link Copied');
+  };
+
   const renderItem = ({item}: {item: ServerItem}) => (
     <View style={styles.row}>
       <View style={styles.rowInfo}>
@@ -116,10 +138,31 @@ export default function HomeScreen({navigation}: Props) {
                 <Text style={styles.listTitleText}>Servers List</Text>
               )}
               {data.length === 0 && (
-                <Text style={[styles.text, styles.helperText]}>
-                  Tap the + button to scan a QRCode from the Peyara desktop
-                  app.
-                </Text>
+                <View style={styles.emptyState}>
+                  <Text style={[styles.text, styles.helperText]}>
+                    Tap the + button to scan a QRCode from the Peyara desktop
+                    app.
+                  </Text>
+                  <Text style={styles.downloadPrompt}>
+                    Download the server app for Windows, MacOS or Linux:
+                  </Text>
+                  <Text
+                    style={styles.linkText}
+                    onPress={openServerDownloadLink}>
+                    {SERVER_DOWNLOAD_LINK}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={copyServerDownloadLink}
+                    activeOpacity={0.8}>
+                    <MaterialIcons
+                      name="content-copy"
+                      size={16}
+                      color={colors.PRIM_ACCENT}
+                    />
+                    <Text style={styles.copyButtonText}>Copy link</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           }
@@ -207,6 +250,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 120,
     fontSize: 16,
+    fontFamily: 'Raleway-Regular',
+  },
+  emptyState: {
+    alignItems: 'center',
+  },
+  downloadPrompt: {
+    color: colors.WHITE,
+    fontSize: 14,
+    marginTop: 24,
+    fontFamily: 'Raleway-Regular',
+  },
+  linkText: {
+    color: colors.PRIM_FRONT,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    fontFamily: 'Raleway-Regular',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: colors.TOUCHPAD,
+  },
+  copyButtonText: {
+    color: colors.PRIM_ACCENT,
+    fontSize: 14,
     fontFamily: 'Raleway-Regular',
   },
   plusButton: {

@@ -82,8 +82,8 @@ android {
         applicationId "io.github.ayonshafiul.peyara"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 42
+        versionName "3.0"
     }
     signingConfigs {
         debug {
@@ -92,15 +92,33 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Release signing credentials live in android/keystore.properties
+            // (git-ignored). See android/keystore.properties.example.
+            // Place your .jks file in android/app/ and point storeFile at it.
+            def keystorePropsFile = rootProject.file('keystore.properties')
+            if (keystorePropsFile.exists()) {
+                def keystoreProps = new Properties()
+                keystoreProps.load(new FileInputStream(keystorePropsFile))
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            } else {
+                throw new GradleException(
+                    "Missing android/keystore.properties. " +
+                    "Copy android/keystore.properties.example to android/keystore.properties, " +
+                    "fill in your keystore credentials, and place your .jks file in android/app/."
+                )
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

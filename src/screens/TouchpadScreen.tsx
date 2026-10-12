@@ -156,7 +156,10 @@ export default function TouchpadScreen({navigation, route}: Props) {
         setSettingsData({
           invertedScroll: invertedScroll,
         });
-        if (route?.params?.serverUrl) {
+        // Reconnect on refocus (e.g. returning from Help/Settings) if the
+        // socket isn't live. Uses the storage fallback too, so a missing
+        // route param can't leave the screen blank with status ''.
+        if (serverUrl && !socket?.connected) {
           connectSocket();
         }
       }
@@ -174,7 +177,6 @@ export default function TouchpadScreen({navigation, route}: Props) {
       deactivateKeepAwake();
       hideConnectedNotification();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Free rotation on the touchpad; every other screen locks to portrait on

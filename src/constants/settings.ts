@@ -9,6 +9,9 @@ export const MIN_DESKTOP_APP_VERSION = '2.0.0';
 
 export const SERVER_REST_RESPONSE = 'peyara';
 
+// Download link for the Peyara desktop server app (Windows/MacOS/Linux)
+export const SERVER_DOWNLOAD_LINK = 'https://peyara-remote-mouse.vercel.app/';
+
 // Settings constants
 export const SETTINGS_INITIALIZED = 'settingsinitialized';
 
