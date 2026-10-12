@@ -11,7 +11,9 @@
     android:icon="@mipmap/ic_launcher"
     android:allowBackup="false"
     android:theme="@style/AppTheme"
-    android:usesCleartextTraffic="${usesCleartextTraffic}"
+    <!-- Peyara talks to the desktop server over plain HTTP on the local
+      network, so cleartext traffic is intentionally always allowed. -->
+    android:usesCleartextTraffic="true"
     android:supportsRtl="true">
     <activity
       android:name=".MainActivity"
