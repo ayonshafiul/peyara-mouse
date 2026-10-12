@@ -10,7 +10,12 @@
 		0C80B921A6F3F58F76C31292 /* libPods-Peyara.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-Peyara.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
-		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		A10000010000000100000002 /* Raleway-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A10000010000000100000001 /* Raleway-Bold.ttf */; };
+		A10000010000000100000004 /* Raleway-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A10000010000000100000003 /* Raleway-Regular.ttf */; };
+		A10000010000000100000006 /* Raleway-Thin.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A10000010000000100000005 /* Raleway-Thin.ttf */; };
+		A10000010000000100000008 /* MaterialIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A10000010000000100000007 /* MaterialIcons.ttf */; };
+		79D9F741573841569AACC7C1 /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7F24EB3483B349CC94DEE67B /* BootSplash.storyboard */; };
+		EE7EAA694A574D5FA2901B97 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1E5E42443704E218E2C8B16 /* Colors.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,8 +27,13 @@
 		5709B34CF0A7D63546082F79 /* Pods-Peyara.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Peyara.release.xcconfig"; path = "Target Support Files/Pods-Peyara/Pods-Peyara.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-Peyara.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Peyara.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Peyara/AppDelegate.swift; sourceTree = "<group>"; };
-		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Peyara/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A10000010000000100000001 /* Raleway-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Raleway-Bold.ttf"; path = "../assets/fonts/Raleway-Bold.ttf"; sourceTree = "<group>"; };
+		A10000010000000100000003 /* Raleway-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Raleway-Regular.ttf"; path = "../assets/fonts/Raleway-Regular.ttf"; sourceTree = "<group>"; };
+		A10000010000000100000005 /* Raleway-Thin.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Raleway-Thin.ttf"; path = "../assets/fonts/Raleway-Thin.ttf"; sourceTree = "<group>"; };
+		A10000010000000100000007 /* MaterialIcons.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = MaterialIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		7F24EB3483B349CC94DEE67B /* BootSplash.storyboard */ = {isa = PBXFileReference; name = "BootSplash.storyboard"; path = "Peyara/BootSplash.storyboard"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		F1E5E42443704E218E2C8B16 /* Colors.xcassets */ = {isa = PBXFileReference; name = "Colors.xcassets"; path = "Peyara/Colors.xcassets"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = folder.assetcatalog; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,8 +54,13 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
-				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				A10000010000000100000001 /* Raleway-Bold.ttf */,
+				A10000010000000100000003 /* Raleway-Regular.ttf */,
+				A10000010000000100000005 /* Raleway-Thin.ttf */,
+				A10000010000000100000007 /* MaterialIcons.ttf */,
+				7F24EB3483B349CC94DEE67B /* BootSplash.storyboard */,
+				F1E5E42443704E218E2C8B16 /* Colors.xcassets */,
 			);
 			name = Peyara;
 			sourceTree = "<group>";
@@ -157,8 +172,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				A10000010000000100000002 /* Raleway-Bold.ttf in Resources */,
+				A10000010000000100000004 /* Raleway-Regular.ttf in Resources */,
+				A10000010000000100000006 /* Raleway-Thin.ttf in Resources */,
+				A10000010000000100000008 /* MaterialIcons.ttf in Resources */,
+				79D9F741573841569AACC7C1 /* BootSplash.storyboard in Resources */,
+				EE7EAA694A574D5FA2901B97 /* Colors.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
