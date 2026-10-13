@@ -3,7 +3,6 @@ import React, {forwardRef, useMemo, useRef} from 'react';
 import colors from '../constants/colors';
 import {BottomSheetModal, BottomSheetScrollView} from '@gorhom/bottom-sheet';
 import type {BottomSheetModal as BottomSheetModalType} from '@gorhom/bottom-sheet';
-import ClipText from '../components/ClipText';
 import ControlButton from '../components/ControlButton';
 
 interface KeyboardModalProps {
@@ -11,8 +10,6 @@ interface KeyboardModalProps {
   sendEditKey: (payload: {key: string; modifier: string[]}) => void;
   sendLeftClick: () => void;
   sendRightClick: () => void;
-  sendText: (text: string) => void;
-  receivedText: string;
 }
 
 function KeyboardModal(
@@ -21,25 +18,19 @@ function KeyboardModal(
     sendEditKey,
     sendLeftClick,
     sendRightClick,
-    sendText,
-    receivedText,
   }: KeyboardModalProps,
   ref: React.Ref<BottomSheetModalType>,
 ) {
   const snapPoints = useMemo(() => ['33%', '60%'], []);
   const scrollViewRef = useRef<any>(null);
-  const scrollToBottom = () => {
-    scrollViewRef.current?.scrollToEnd({animated: true});
-  };
 
   const modifier = Platform.OS === 'ios' ? ['command'] : ['control'];
 
   return (
-    <View style={styles.container}>
-      <BottomSheetModal
-        ref={ref}
-        index={1}
-        snapPoints={snapPoints}
+    <BottomSheetModal
+      ref={ref}
+      index={1}
+      snapPoints={snapPoints}
         handleStyle={{
           backgroundColor: colors.PRIM_BG,
         }}
@@ -169,24 +160,14 @@ function KeyboardModal(
               />
             </View>
           </View>
-
-          <ClipText
-            sendText={sendText}
-            receivedText={receivedText}
-            onFocus={scrollToBottom}
-          />
         </BottomSheetScrollView>
       </BottomSheetModal>
-    </View>
   );
 }
 
 export default forwardRef(KeyboardModal);
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   scrollContainer: {
     backgroundColor: colors.PRIM_BG,
   },

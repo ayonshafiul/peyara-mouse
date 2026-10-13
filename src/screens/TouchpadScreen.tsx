@@ -35,12 +35,14 @@ import {
   DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
   DEFAULT_TOUCHPAD_SENSITIVITY,
   SERVER_URL_KEY,
+  SETTINGS_TOUCHPAD_RESPONSE_RATE,
   SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
   SETTINGS_TOUCHPAD_SENSITIVITY,
 } from '../constants/settings';
 import useInterval from '../hooks/useInterval';
-import {getValueFor} from '../utils/storage';
+import {getValueFor, setValueFor} from '../utils/storage';
 import KeyboardModal from '../modals/KeyboardModal';
+import ClipboardModal from '../modals/ClipboardModal';
 import type {BottomSheetModal as BottomSheetModalType} from '@gorhom/bottom-sheet';
 import RoundKey from '../components/RoundKey';
 import {useIsFocused} from '@react-navigation/native';
@@ -48,6 +50,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {TouchpadStackParamList} from '../navigation/TouchpadNavigator';
 import TouchpadView from '../components/TouchpadView';
 import LandscapeTouchpadView from '../components/LandscapeTouchpadView';
+import QuickTuneRow, {type TuneValues} from '../components/QuickTuneRow';
 import {useGlobalStore} from '../store/useGlobalStore';
 import notifee, {EventType, type Event} from 'react-native-notify-kit';
 import {
@@ -76,6 +79,22 @@ function clamp(val: number, min: number, max: number): number {
   return Math.min(Math.max(val, min), max);
 }
 
+function loadTuneValues(): TuneValues {
+  return {
+    touch: Number(
+      getValueFor(SETTINGS_TOUCHPAD_SENSITIVITY) ??
+        DEFAULT_TOUCHPAD_SENSITIVITY,
+    ),
+    scroll: Number(
+      getValueFor(SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY) ??
+        DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
+    ),
+    rate: Number(
+      getResponseRateSettings() ?? DEFAULT_TOUCHPAD_RESPONSE_RATE,
+    ),
+  };
+}
+
 const DRAG_START_THRESHOLD_IN_MS = 200;
 const MAX_TRANSLATE_Y = 180;
 
@@ -89,11 +108,12 @@ export default function TouchpadScreen({navigation, route}: Props) {
     {},
   );
   const [receivedText, setReceivedText] = useState('');
+  const [clipboardVisible, setClipboardVisible] = useState(false);
   const [showLandscape, setShowLandscape] = useState(false);
   const [showTopControls, setShowTopControls] = useState(true);
+  const [tune, setTune] = useState<TuneValues>(loadTuneValues);
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const responseRate = getResponseRateSettings();
   const isFocused = useIsFocused();
 
   const serverUrl = useMemo(
@@ -137,14 +157,10 @@ export default function TouchpadScreen({navigation, route}: Props) {
     (async function setSensitivities() {
       if (isFocused) {
         Orientation.lockToPortrait();
-        tS.current = Number(
-          getValueFor(SETTINGS_TOUCHPAD_SENSITIVITY) ??
-            DEFAULT_TOUCHPAD_SENSITIVITY,
-        );
-        sS.current = Number(
-          getValueFor(SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY) ??
-            DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
-        );
+        const tuneValues = loadTuneValues();
+        tS.current = tuneValues.touch;
+        sS.current = tuneValues.scroll;
+        setTune(tuneValues);
         const invertedScroll = getInvertedScrollSettings();
         invertedScrollSV.value = invertedScroll ?? false;
         const keepAwake = getKeepAwakeSettings();
@@ -220,7 +236,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
 
       socket.on('text-mobile', (text: string) => {
         setReceivedText(text);
-        keyboardModalRef?.current?.present();
+        // open the clipboard modal for quick copying
+        setClipboardVisible(true);
       });
     } else {
       setLoading(false);
@@ -233,6 +250,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       socket?.disconnect();
       socket = null;
       keyboardModalRef?.current?.dismiss();
+      setClipboardVisible(false);
       hideConnectedNotification();
       setPortraitMode();
     }
@@ -339,7 +357,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         accSY.value = 0;
       }
     },
-    Number(responseRate ?? DEFAULT_TOUCHPAD_RESPONSE_RATE),
+    Number(tune.rate),
   );
 
   const sendWindowDragStart = () => {
@@ -528,6 +546,22 @@ export default function TouchpadScreen({navigation, route}: Props) {
     keyboardModalRef?.current?.present();
   };
 
+  const showClipboard = () => {
+    keyboardModalRef?.current?.dismiss();
+    setClipboardVisible(true);
+  };
+
+  // Applies quick-tune stepper changes immediately to the live gesture
+  // accumulators and persists them so Settings stays in sync.
+  const handleTune = (next: TuneValues) => {
+    setTune(next);
+    tS.current = next.touch;
+    sS.current = next.scroll;
+    setValueFor(SETTINGS_TOUCHPAD_SENSITIVITY, String(next.touch));
+    setValueFor(SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY, String(next.scroll));
+    setValueFor(SETTINGS_TOUCHPAD_RESPONSE_RATE, String(next.rate));
+  };
+
   const insets = useSafeAreaInsets();
 
   const statusViews = (
@@ -573,6 +607,13 @@ export default function TouchpadScreen({navigation, route}: Props) {
                   color={colors.WHITE}
                 />
               </RoundKey>
+              <RoundKey containerStyle={styles.roundKey} onPress={showClipboard}>
+                <MaterialIcons
+                  name="content-paste"
+                  size={24}
+                  color={colors.WHITE}
+                />
+              </RoundKey>
               <RoundKey
                 containerStyle={styles.roundKey}
                 onPress={showLandscape ? setPortraitMode : setLandscapeMode}>
@@ -595,6 +636,9 @@ export default function TouchpadScreen({navigation, route}: Props) {
                 <MaterialIcons name="close" size={24} color={colors.WHITE} />
               </RoundKey>
             </View>
+          )}
+          {status === 'Connected' && showTopControls && (
+            <QuickTuneRow values={tune} onChange={handleTune} />
           )}
         </>
       );
@@ -650,9 +694,28 @@ export default function TouchpadScreen({navigation, route}: Props) {
       sendEditKey={sendEditKey}
       sendLeftClick={sendLeftClick}
       sendRightClick={sendRightClick}
+    />
+  );
+
+  const clipboardModal = (
+    <ClipboardModal
+      visible={clipboardVisible}
       sendText={sendText}
       receivedText={receivedText}
+      onClose={() => setClipboardVisible(false)}
+      onClearReceived={() => setReceivedText('')}
     />
+  );
+
+  // The touchpad, controls and hidden input only render when connected.
+  // Otherwise the (flex: 1) connecting / disconnected views would split
+  // the screen with the touchpad and squeeze it into half the space.
+  const touchpadContent = (
+    <>
+      {topControls}
+      {hiddenInput}
+      {touchpadArea}
+    </>
   );
 
   // Landscape owns its insets explicitly (cutout + gesture bar) so the pad
@@ -662,20 +725,15 @@ export default function TouchpadScreen({navigation, route}: Props) {
       <StatusBar hidden />
       {showLandscape ? (
         <View style={styles.container}>
-          {statusViews}
-          {topControls}
-          {hiddenInput}
-          {touchpadArea}
+          {status === 'Connected' ? touchpadContent : statusViews}
         </View>
       ) : (
         <SafeAreaView style={styles.container}>
-          {statusViews}
-          {topControls}
-          {hiddenInput}
-          {touchpadArea}
+          {status === 'Connected' ? touchpadContent : statusViews}
         </SafeAreaView>
       )}
       {keyboardModal}
+      {clipboardModal}
     </>
   );
 }

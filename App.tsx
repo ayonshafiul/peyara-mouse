@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {NavigationContainer, DefaultTheme} from '@react-navigation/native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import {KeyboardProvider} from 'react-native-keyboard-controller';
 import RootNavigator from './src/navigation/RootNavigator';
 import type {RootStackParamList} from './src/navigation/RootNavigator';
 import {BottomSheetModalProvider} from '@gorhom/bottom-sheet';
@@ -51,7 +52,8 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{flex: 1}}>
-      <SafeAreaProvider>
+      <KeyboardProvider>
+        <SafeAreaProvider>
         <NavigationContainer theme={NavigationTheme}>
           <BottomSheetModalProvider>
             {!initialRoute && (
@@ -62,7 +64,8 @@ export default function App() {
             )}
           </BottomSheetModalProvider>
         </NavigationContainer>
-      </SafeAreaProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }
