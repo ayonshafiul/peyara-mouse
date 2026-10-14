@@ -6,6 +6,7 @@ import {
 import Orientation from 'react-native-orientation-locker';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   StatusBar,
   StyleSheet,
@@ -23,7 +24,8 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import colors from '../constants/colors';
-import {buildWsUrl, parseServerMessage} from '../utils/protocol';
+import {parseServerMessage} from '../utils/protocol';
+import {fpPreview, plog, plogError} from '../utils/logger';
 import {
   getInvertedScrollSettings,
   getKeepAwakeSettings,
@@ -34,11 +36,19 @@ import {
   DEFAULT_TOUCHPAD_RESPONSE_RATE,
   DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
   DEFAULT_TOUCHPAD_SENSITIVITY,
+  SERVER_FINGERPRINT_KEY,
   SERVER_URL_KEY,
   SETTINGS_TOUCHPAD_RESPONSE_RATE,
   SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
   SETTINGS_TOUCHPAD_SENSITIVITY,
 } from '../constants/settings';
+import {
+  connectPinned,
+  disconnectPinned,
+  onPinnedMessage,
+  onPinnedStatus,
+  sendPinnedMessage,
+} from '../native/PeyaraSocket';
 import useInterval from '../hooks/useInterval';
 import {getValueFor, setValueFor} from '../utils/storage';
 import KeyboardModal from '../modals/KeyboardModal';
@@ -60,16 +70,7 @@ import {
   showConnectedNotification,
 } from '../utils/notifications';
 
-let ws: WebSocket | null = null;
 const textInputValueProps = Platform.OS === 'ios' ? {value: ''} : {};
-
-// Fire-and-forget sender for protocol v2 JSON frames. Drops messages while
-// the socket isn't open (no acks, no queueing — per the protocol).
-function sendWsMessage(msg: object) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
-}
 
 // Notification action handler (foreground + background): pressing a media
 // action sends the matching media-key to the connected desktop, if any.
@@ -77,7 +78,8 @@ const handleNotificationEvent = async ({type, detail}: Event) => {
   if (type === EventType.ACTION_PRESS) {
     const mediaKey = getMediaKeyForAction(detail.pressAction?.id);
     if (mediaKey) {
-      sendWsMessage({type: 'media-key', key: mediaKey});
+      plog('Touchpad', `notification media-key: ${mediaKey}`);
+      sendPinnedMessage({type: 'media-key', key: mediaKey});
     }
   }
 };
@@ -122,22 +124,18 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const [tune, setTune] = useState<TuneValues>(loadTuneValues);
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectAttempts = useRef(0);
-  const manualDisconnectRef = useRef(false);
-
-  const clearReconnectTimer = () => {
-    if (reconnectTimer.current) {
-      clearTimeout(reconnectTimer.current);
-      reconnectTimer.current = null;
-    }
-  };
   const isFocused = useIsFocused();
 
   const serverUrl = useMemo(
     () => route?.params?.serverUrl ?? getValueFor(SERVER_URL_KEY) ?? null,
     [route?.params],
   );
+  const fingerprint = useMemo(
+    () => route?.params?.fingerprint ?? getValueFor(SERVER_FINGERPRINT_KEY) ?? '',
+    [route?.params],
+  );
+  // Mirrors the native connection state (the module owns reconnecting).
+  const connectedRef = useRef(false);
 
   // UI-thread accumulators: exact per-tick deltas (float px).
   const accX = useSharedValue(0);
@@ -191,10 +189,19 @@ export default function TouchpadScreen({navigation, route}: Props) {
           invertedScroll: invertedScroll,
         });
         // Reconnect on refocus (e.g. returning from Help/Settings) if the
-        // socket isn't open. Uses the storage fallback too, so a missing
-        // route param can't leave the screen blank with status ''.
-        if (serverUrl && !(ws && ws.readyState === WebSocket.OPEN)) {
+        // native layer isn't connected. Uses the storage fallback too, so a
+        // missing route param can't leave the screen blank with status ''.
+        if (serverUrl && fingerprint && !connectedRef.current) {
+          plog(
+            'Touchpad',
+            `refocus connect url=${serverUrl} fp=${fpPreview(fingerprint)}`,
+          );
           connectSocket();
+        } else {
+          plog(
+            'Touchpad',
+            `refocus skip connected=${connectedRef.current} hasUrl=${!!serverUrl} hasFp=${!!fingerprint}`,
+          );
         }
       }
     })();
@@ -204,18 +211,47 @@ export default function TouchpadScreen({navigation, route}: Props) {
   useEffect(() => {
     requestNotificationPermission();
     const unsubscribe = notifee.onForegroundEvent(handleNotificationEvent);
-    return () => {
-      unsubscribe();
-      manualDisconnectRef.current = true;
-      clearReconnectTimer();
-      if (ws) {
-        try {
-          ws.close();
-        } catch {
-          // already closed
-        }
-        ws = null;
+    const messageSub = onPinnedMessage(raw => {
+      const msg = parseServerMessage(raw);
+      if (msg?.type === 'text-mobile') {
+        const text = typeof msg.text === 'string' ? msg.text : '';
+        plog('Touchpad', `text-mobile received len=${text.length}`);
+        setReceivedText(text);
+        // open the clipboard modal for quick copying
+        setClipboardVisible(true);
+      } else {
+        plog('Touchpad', `ignored frame type=${msg?.type ?? '(unparseable)'}`);
       }
+    });
+    const statusSub = onPinnedStatus(pinnedStatus => {
+      plog('Touchpad', `status event: ${pinnedStatus}`);
+      if (pinnedStatus === 'connected') {
+        connectedRef.current = true;
+        setStatus('Connected');
+        setLoading(false);
+        showConnectedNotification();
+        keyboardModalRef?.current?.present();
+      } else {
+        connectedRef.current = false;
+        setStatus('Disconnected');
+        hideConnectedNotification();
+        setLoading(false);
+        if (pinnedStatus === 'unrecoverable') {
+          // Certificate rotated/regenerated — a rescan is required.
+          Alert.alert(
+            'Server certificate changed',
+            'Please scan the QR code from the Peyara desktop app again.',
+          );
+        }
+      }
+    });
+    return () => {
+      plog('Touchpad', 'unmount cleanup, disconnecting');
+      unsubscribe();
+      messageSub.remove();
+      statusSub.remove();
+      connectedRef.current = false;
+      disconnectPinned();
       deactivateKeepAwake();
       hideConnectedNotification();
     };
@@ -230,100 +266,53 @@ export default function TouchpadScreen({navigation, route}: Props) {
     }
   }, [isFocused, showLandscape, setShowBottomBar]);
 
-  // socket.io used to reconnect for us; with native WebSockets it's our
-  // job: retry with exponential backoff + jitter unless the user
-  // disconnected on purpose.
-  const scheduleReconnect = () => {
-    if (manualDisconnectRef.current) {
+  // Pinned-TLS connection via the native PeyaraSocket module (it owns
+  // reconnecting). Needs both the https base URL and the QR fingerprint.
+  const connectSocket = async () => {
+    if (!serverUrl || !fingerprint) {
+      plogError(
+        'Touchpad',
+        `missing credentials hasUrl=${!!serverUrl} hasFp=${!!fingerprint}`,
+      );
+      Alert.alert(
+        'Server certificate missing',
+        'Please scan the QR code from the Peyara desktop app again.',
+      );
+      setLoading(false);
+      setStatus('Disconnected');
       return;
     }
-    clearReconnectTimer();
-    const attempt = reconnectAttempts.current;
-    reconnectAttempts.current += 1;
-    const delay = Math.min(30000, 1000 * 2 ** attempt) + Math.random() * 500;
-    reconnectTimer.current = setTimeout(() => {
-      if (!manualDisconnectRef.current) {
-        connectSocket();
-      }
-    }, delay);
-  };
-
-  // Native WebSocket connection handler (server speaks plain WS at /ws).
-  const connectSocket = async () => {
     setLoading(true);
-    // Tear down any previous socket silently (not a manual disconnect).
-    clearReconnectTimer();
-    if (ws) {
-      const prev = ws;
-      ws = null;
-      try {
-        prev.close();
-      } catch {
-        // already closed
-      }
-    }
-    manualDisconnectRef.current = false;
-    reconnectAttempts.current = 0;
-    if (serverUrl) {
-      const next: WebSocket = new WebSocket(buildWsUrl(serverUrl));
-      ws = next;
-      next.onopen = () => {
-        if (ws !== next) {
-          return;
-        }
-        reconnectAttempts.current = 0;
-        setStatus('Connected');
-        setLoading(false);
-        showConnectedNotification();
-        keyboardModalRef?.current?.present();
-      };
-      next.onmessage = event => {
-        const msg = parseServerMessage(event?.data);
-        if (msg?.type === 'text-mobile') {
-          setReceivedText(typeof msg.text === 'string' ? msg.text : '');
-          // open the clipboard modal for quick copying
-          setClipboardVisible(true);
-        }
-      };
-      next.onerror = () => {
-        // onclose follows with the disconnect handling + reconnect below
-      };
-      next.onclose = () => {
-        // ignore stale sockets superseded by a newer connection
-        if (ws !== next) {
-          return;
-        }
-        ws = null;
-        setStatus('Disconnected');
-        hideConnectedNotification();
-        setLoading(false);
-        scheduleReconnect();
-      };
-    } else {
+    plog(
+      'Touchpad',
+      `connectPinned url=${serverUrl} fp=${fpPreview(fingerprint)}`,
+    );
+    try {
+      // Resolves once started; progress arrives via status events and the
+      // native layer owns reconnecting from here on.
+      await connectPinned(fingerprint, serverUrl);
+      plog('Touchpad', 'connectPinned started');
+    } catch (error) {
+      // Invalid arguments; runtime failures arrive via status events.
+      plogError(
+        'Touchpad',
+        `connectPinned threw: ${error instanceof Error ? error.message : String(error)}`,
+      );
       setLoading(false);
       setStatus('Disconnected');
     }
   };
 
   const disconnectSocket = async () => {
-    manualDisconnectRef.current = true;
-    clearReconnectTimer();
-    reconnectAttempts.current = 0;
-    if (ws) {
-      const prev = ws;
-      ws = null;
-      try {
-        prev.close();
-      } catch {
-        // already closed
-      }
-      keyboardModalRef?.current?.dismiss();
-      setClipboardVisible(false);
-      hideConnectedNotification();
-      setPortraitMode();
-      setStatus('Disconnected');
-      setLoading(false);
-    }
+    plog('Touchpad', 'manual disconnect');
+    connectedRef.current = false;
+    disconnectPinned();
+    keyboardModalRef?.current?.dismiss();
+    setClipboardVisible(false);
+    hideConnectedNotification();
+    setPortraitMode();
+    setStatus('Disconnected');
+    setLoading(false);
   };
 
   const openHelp = () => {
@@ -381,7 +370,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
           Date.now() - lastTappedInRef.current >
           DRAG_START_THRESHOLD_IN_MS
         ) {
-          sendWsMessage({type: 'clicks', finger: 'left', doubleTap: false});
+          sendPinnedMessage({type: 'clicks', finger: 'left', doubleTap: false});
+          plog('Touchpad', 'send tap-click left');
           pendingLeftClick.current = false;
         }
       }
@@ -391,7 +381,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         const dx = accX.value;
         const dy = accY.value;
         if (dx !== 0 || dy !== 0) {
-          sendWsMessage({
+          sendPinnedMessage({
             type: 'windowdragupdate',
             x: dx * tS.current,
             y: dy * tS.current,
@@ -401,7 +391,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         }
       } else if (accX.value !== 0 || accY.value !== 0) {
         pendingLeftClick.current = false;
-        sendWsMessage({
+        sendPinnedMessage({
           type: 'coordinates',
           x: accX.value * tS.current,
           y: accY.value * tS.current,
@@ -409,7 +399,11 @@ export default function TouchpadScreen({navigation, route}: Props) {
         accX.value = 0;
         accY.value = 0;
       } else if (clickStateFinger.current) {
-        sendWsMessage({
+        plog(
+          'Touchpad',
+          `send click ${clickStateFinger.current} doubleTap=${clickStateIsDoubleTap.current}`,
+        );
+        sendPinnedMessage({
           type: 'clicks',
           finger: clickStateFinger.current,
           doubleTap: clickStateIsDoubleTap.current,
@@ -419,7 +413,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       }
 
       if (accSX.value !== 0 || accSY.value !== 0) {
-        sendWsMessage({
+        sendPinnedMessage({
           type: 'scroll',
           x: accSX.value * sS.current,
           y: accSY.value * sS.current,
@@ -436,7 +430,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
     // drop any pre-drag residue so the drag starts exactly at the finger
     accX.value = 0;
     accY.value = 0;
-    sendWsMessage({type: 'windowdragstart'});
+    plog('Touchpad', 'send windowdragstart');
+    sendPinnedMessage({type: 'windowdragstart'});
   };
   const sendWindowDragEnd = () => {
     isDraggingRef.current = false;
@@ -444,26 +439,36 @@ export default function TouchpadScreen({navigation, route}: Props) {
     accY.value = 0;
     prevTX.value = 0;
     prevTY.value = 0;
-    sendWsMessage({type: 'windowdragend'});
+    plog('Touchpad', 'send windowdragend');
+    sendPinnedMessage({type: 'windowdragend'});
   };
   const sendKey = (key: string) => {
-    sendWsMessage({type: 'key', key});
+    plog('Touchpad', `send key: ${key}`);
+    sendPinnedMessage({type: 'key', key});
   };
   const sendMediaKey = (key: string) => {
-    sendWsMessage({type: 'media-key', key});
+    plog('Touchpad', `send media-key: ${key}`);
+    sendPinnedMessage({type: 'media-key', key});
   };
   const sendEditKey = (payload: {key: string; modifier: string[]}) => {
-    sendWsMessage({type: 'edit-key', key: payload.key, modifier: payload.modifier});
+    plog(
+      'Touchpad',
+      `send edit-key: ${payload.key} modifier=${payload.modifier.join('+')}`,
+    );
+    sendPinnedMessage({type: 'edit-key', key: payload.key, modifier: payload.modifier});
   };
   const sendText = (text: string) => {
-    sendWsMessage({type: 'text', text});
+    plog('Touchpad', `send text len=${text.length}`);
+    sendPinnedMessage({type: 'text', text});
   };
   const sendLeftClick = () => {
-    sendWsMessage({type: 'clicks', finger: 'left', doubleTap: false});
+    plog('Touchpad', 'send click left');
+    sendPinnedMessage({type: 'clicks', finger: 'left', doubleTap: false});
   };
 
   const sendRightClick = () => {
-    sendWsMessage({type: 'clicks', finger: 'right', doubleTap: false});
+    plog('Touchpad', 'send click right');
+    sendPinnedMessage({type: 'clicks', finger: 'right', doubleTap: false});
   };
 
   // mouse movement gesture handler

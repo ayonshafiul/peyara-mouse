@@ -19,6 +19,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../constants/colors';
 import {SERVER_DOWNLOAD_LINK} from '../constants/settings';
 import {addServer} from '../utils/servers';
+import {plog, plogError} from '../utils/logger';
 import AppButton from '../components/AppButton';
 import Orientation from 'react-native-orientation-locker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -48,13 +49,16 @@ export default function QRCodeScreen({navigation}: Props) {
       handlingRef.current = true;
       setLoading(true);
       setActive(false);
+      plog('QR', `scan received len=${data.length}`);
       const {error, errorTitle} = await addServer(data);
       setLoading(false);
       if (error) {
+        plogError('QR', `addServer failed: ${errorTitle}`);
         Alert.alert('Scan failed', errorTitle);
         setScanned(true);
         handlingRef.current = false;
       } else {
+        plog('QR', 'server saved, going back');
         navigation.goBack();
       }
     },

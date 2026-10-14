@@ -3,10 +3,7 @@
  */
 
 import {addServer, getServers} from '../src/utils/servers';
-import {
-  MIN_DESKTOP_APP_VERSION,
-  QRCODE_SECRET,
-} from '../src/constants/settings';
+import {QRCODE_SECRET} from '../src/constants/settings';
 
 jest.mock('../src/utils/storage', () => {
   const store: Record<string, string> = {};
@@ -18,10 +15,33 @@ jest.mock('../src/utils/storage', () => {
     getValueFor: jest.fn((key: string) => store[key]),
     setBooleanValueFor: jest.fn(),
     getBooleanValueFor: jest.fn(),
+    __clearStore: jest.fn(() => {
+      for (const key of Object.keys(store)) {
+        delete store[key];
+      }
+    }),
   };
 });
 
-describe('QR server validation (mouse/keyboard/clipboard client)', () => {
+jest.mock('../src/native/PeyaraSocket', () => ({
+  __esModule: true,
+  verifyPinnedServer: jest.fn(),
+  connectPinned: jest.fn(),
+  disconnectPinned: jest.fn(),
+  sendPinnedMessage: jest.fn(),
+  onPinnedMessage: jest.fn(),
+  onPinnedStatus: jest.fn(),
+}));
+
+const TEST_FP = 'ab'.repeat(32); // 64 hex chars
+const validQR = (extra = '') =>
+  `2.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},https://192.168.1.5:1313/${extra}`;
+
+describe('QR server validation (pinned-TLS client)', () => {
+  beforeEach(() => {
+    require('../src/utils/storage').__clearStore();
+  });
+
   test('rejects empty QR data', async () => {
     const res = await addServer('');
     expect(res.error).toBe(true);
@@ -34,17 +54,57 @@ describe('QR server validation (mouse/keyboard/clipboard client)', () => {
   });
 
   test('rejects outdated desktop app version', async () => {
-    const res = await addServer(`0.0.1,${QRCODE_SECRET},host,http://x`);
+    const res = await addServer(
+      `1.9.9,${QRCODE_SECRET},host,sha256:${TEST_FP},https://x`,
+    );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/update desktop app/i);
   });
 
   test('rejects wrong secret', async () => {
     const res = await addServer(
-      `${MIN_DESKTOP_APP_VERSION},<wrong-secret>,host,http://x`,
+      `2.0.0,<wrong-secret>,host,sha256:${TEST_FP},https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/Peyara Desktop App/);
+  });
+
+  test('rejects missing fingerprint', async () => {
+    const res = await addServer(
+      `2.0.0,${QRCODE_SECRET},host,extra-field,https://x`,
+    );
+    expect(res.error).toBe(true);
+    expect(res.errorTitle).toMatch(/fingerprint/i);
+  });
+
+  test('rejects malformed fingerprint', async () => {
+    const res = await addServer(
+      `2.0.0,${QRCODE_SECRET},host,sha256:xyz,https://x`,
+    );
+    expect(res.error).toBe(true);
+    expect(res.errorTitle).toMatch(/fingerprint/i);
+  });
+
+  test('accepts valid QR after pinned verification', async () => {
+    const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
+    verifyPinnedServer.mockResolvedValue('"peyara"');
+    const res = await addServer(validQR());
+    expect(res.error).toBe(false);
+    expect(verifyPinnedServer).toHaveBeenCalledWith(
+      TEST_FP,
+      'https://192.168.1.5:1313',
+    );
+    const servers = getServers();
+    expect(servers.length).toBe(1);
+    expect(servers[0]).toContain(TEST_FP);
+  });
+
+  test('fails when no candidate url verifies', async () => {
+    const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
+    verifyPinnedServer.mockRejectedValue(new Error('pin mismatch'));
+    const res = await addServer(validQR(',https://192.168.1.6:1313/'));
+    expect(res.error).toBe(true);
+    expect(res.errorTitle).toMatch(/Couldn't connect/);
   });
 
 jest.mock('react-native-notify-kit', () => ({

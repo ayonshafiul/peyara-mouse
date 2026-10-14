@@ -3,6 +3,8 @@ export const SERVER_KEY = 'servers';
 
 export const SERVER_URL_KEY = 'SERVER_URL';
 
+export const SERVER_FINGERPRINT_KEY = 'SERVER_FINGERPRINT';
+
 export const QRCODE_SECRET = '<peyara>';
 
 export const MIN_DESKTOP_APP_VERSION = '2.0.0';

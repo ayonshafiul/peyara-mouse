@@ -82,7 +82,7 @@ yarn ios
 
 [react-native-vision-camera](https://github.com/mrousavy/react-native-vision-camera)
 
-[socket.io](https://github.com/socketio/socket.io)
+[pinned-TLS native networking (OkHttp / URLSession)](https://github.com/ayonshafiul/peyara-mouse)
 
 ## Icons
 

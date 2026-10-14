@@ -16,6 +16,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import {
   QRCODE_SECRET,
   SERVER_DOWNLOAD_LINK,
+  SERVER_FINGERPRINT_KEY,
   SERVER_URL_KEY,
 } from '../constants/settings';
 import {setValueFor} from '../utils/storage';
@@ -31,6 +32,7 @@ interface ServerItem {
   urlData: string;
   url: string;
   host: string;
+  fingerprint: string;
 }
 
 type Props = NativeStackScreenProps<TabParamList, 'Home'>;
@@ -49,11 +51,14 @@ export default function HomeScreen({navigation}: Props) {
           const separatedArray = s?.split(QRCODE_SECRET);
           const url = separatedArray[0];
           const host = separatedArray[1];
+          // v2 entries carry the TLS fingerprint; legacy entries predate it
+          const fingerprint = separatedArray[2] ?? '';
           return {
             key: `key-${index + 1}`,
             urlData: s,
             url,
             host,
+            fingerprint,
           };
         });
         setData(servers);
@@ -71,9 +76,10 @@ export default function HomeScreen({navigation}: Props) {
 
   const onPressConnect = (item: ServerItem) => {
     setValueFor(SERVER_URL_KEY, item?.url);
+    setValueFor(SERVER_FINGERPRINT_KEY, item?.fingerprint ?? '');
     navigation.navigate('Touchpad', {
       screen: 'TouchpadScreen',
-      params: {serverUrl: item?.url},
+      params: {serverUrl: item?.url, fingerprint: item?.fingerprint ?? ''},
     });
   };
 

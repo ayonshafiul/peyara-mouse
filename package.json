@@ -6,10 +6,24 @@
     "android": "react-native run-android",
     "build:android": "react-native build-android --tasks bundleRelease",
     "build:android:apk": "react-native build-android --mode=release",
+    "logs:android": "adb logcat -v color 'ReactNative:V' 'ReactNativeJS:V' 'AndroidRuntime:E' '*:S'",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest"
+  },
+  "codegenConfig": {
+    "name": "PeyaraSocketSpec",
+    "type": "modules",
+    "jsSrcsDir": "specs",
+    "android": {
+      "javaPackageName": "com.peyarasocket"
+    },
+    "ios": {
+      "modulesProvider": {
+        "PeyaraSocket": "PeyaraSocket"
+      }
+    }
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
