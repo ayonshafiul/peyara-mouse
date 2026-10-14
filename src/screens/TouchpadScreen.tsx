@@ -23,7 +23,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import colors from '../constants/colors';
-import {io, Socket} from 'socket.io-client';
+import {buildWsUrl, parseServerMessage} from '../utils/protocol';
 import {
   getInvertedScrollSettings,
   getKeepAwakeSettings,
@@ -60,16 +60,24 @@ import {
   showConnectedNotification,
 } from '../utils/notifications';
 
-let socket: Socket | null = null;
+let ws: WebSocket | null = null;
 const textInputValueProps = Platform.OS === 'ios' ? {value: ''} : {};
 
+// Fire-and-forget sender for protocol v2 JSON frames. Drops messages while
+// the socket isn't open (no acks, no queueing — per the protocol).
+function sendWsMessage(msg: object) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
 // Notification action handler (foreground + background): pressing a media
-// action emits the matching media-key to the connected desktop, if any.
+// action sends the matching media-key to the connected desktop, if any.
 const handleNotificationEvent = async ({type, detail}: Event) => {
   if (type === EventType.ACTION_PRESS) {
     const mediaKey = getMediaKeyForAction(detail.pressAction?.id);
     if (mediaKey) {
-      socket?.emit('media-key', mediaKey);
+      sendWsMessage({type: 'media-key', key: mediaKey});
     }
   }
 };
@@ -114,6 +122,16 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const [tune, setTune] = useState<TuneValues>(loadTuneValues);
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
+  const manualDisconnectRef = useRef(false);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+  };
   const isFocused = useIsFocused();
 
   const serverUrl = useMemo(
@@ -173,9 +191,9 @@ export default function TouchpadScreen({navigation, route}: Props) {
           invertedScroll: invertedScroll,
         });
         // Reconnect on refocus (e.g. returning from Help/Settings) if the
-        // socket isn't live. Uses the storage fallback too, so a missing
+        // socket isn't open. Uses the storage fallback too, so a missing
         // route param can't leave the screen blank with status ''.
-        if (serverUrl && !socket?.connected) {
+        if (serverUrl && !(ws && ws.readyState === WebSocket.OPEN)) {
           connectSocket();
         }
       }
@@ -188,8 +206,16 @@ export default function TouchpadScreen({navigation, route}: Props) {
     const unsubscribe = notifee.onForegroundEvent(handleNotificationEvent);
     return () => {
       unsubscribe();
-      socket?.disconnect();
-      socket = null;
+      manualDisconnectRef.current = true;
+      clearReconnectTimer();
+      if (ws) {
+        try {
+          ws.close();
+        } catch {
+          // already closed
+        }
+        ws = null;
+      }
       deactivateKeepAwake();
       hideConnectedNotification();
     };
@@ -204,41 +230,75 @@ export default function TouchpadScreen({navigation, route}: Props) {
     }
   }, [isFocused, showLandscape, setShowBottomBar]);
 
-  // socket connection handler
+  // socket.io used to reconnect for us; with native WebSockets it's our
+  // job: retry with exponential backoff + jitter unless the user
+  // disconnected on purpose.
+  const scheduleReconnect = () => {
+    if (manualDisconnectRef.current) {
+      return;
+    }
+    clearReconnectTimer();
+    const attempt = reconnectAttempts.current;
+    reconnectAttempts.current += 1;
+    const delay = Math.min(30000, 1000 * 2 ** attempt) + Math.random() * 500;
+    reconnectTimer.current = setTimeout(() => {
+      if (!manualDisconnectRef.current) {
+        connectSocket();
+      }
+    }, delay);
+  };
+
+  // Native WebSocket connection handler (server speaks plain WS at /ws).
   const connectSocket = async () => {
     setLoading(true);
-    // disconnect existing connections
-    disconnectSocket();
+    // Tear down any previous socket silently (not a manual disconnect).
+    clearReconnectTimer();
+    if (ws) {
+      const prev = ws;
+      ws = null;
+      try {
+        prev.close();
+      } catch {
+        // already closed
+      }
+    }
+    manualDisconnectRef.current = false;
+    reconnectAttempts.current = 0;
     if (serverUrl) {
-      socket = io(serverUrl, {
-        transports: ['websocket'],
-      });
-      socket.on('connect', () => {
+      const next: WebSocket = new WebSocket(buildWsUrl(serverUrl));
+      ws = next;
+      next.onopen = () => {
+        if (ws !== next) {
+          return;
+        }
+        reconnectAttempts.current = 0;
         setStatus('Connected');
         setLoading(false);
         showConnectedNotification();
         keyboardModalRef?.current?.present();
-      });
-
-      socket.on('connect_error', error => {
-        console.log(error);
+      };
+      next.onmessage = event => {
+        const msg = parseServerMessage(event?.data);
+        if (msg?.type === 'text-mobile') {
+          setReceivedText(typeof msg.text === 'string' ? msg.text : '');
+          // open the clipboard modal for quick copying
+          setClipboardVisible(true);
+        }
+      };
+      next.onerror = () => {
+        // onclose follows with the disconnect handling + reconnect below
+      };
+      next.onclose = () => {
+        // ignore stale sockets superseded by a newer connection
+        if (ws !== next) {
+          return;
+        }
+        ws = null;
         setStatus('Disconnected');
-        socket?.disconnect();
         hideConnectedNotification();
         setLoading(false);
-      });
-
-      socket.on('disconnect', () => {
-        setStatus('Disconnected');
-        hideConnectedNotification();
-        setLoading(false);
-      });
-
-      socket.on('text-mobile', (text: string) => {
-        setReceivedText(text);
-        // open the clipboard modal for quick copying
-        setClipboardVisible(true);
-      });
+        scheduleReconnect();
+      };
     } else {
       setLoading(false);
       setStatus('Disconnected');
@@ -246,13 +306,23 @@ export default function TouchpadScreen({navigation, route}: Props) {
   };
 
   const disconnectSocket = async () => {
-    if (socket) {
-      socket?.disconnect();
-      socket = null;
+    manualDisconnectRef.current = true;
+    clearReconnectTimer();
+    reconnectAttempts.current = 0;
+    if (ws) {
+      const prev = ws;
+      ws = null;
+      try {
+        prev.close();
+      } catch {
+        // already closed
+      }
       keyboardModalRef?.current?.dismiss();
       setClipboardVisible(false);
       hideConnectedNotification();
       setPortraitMode();
+      setStatus('Disconnected');
+      setLoading(false);
     }
   };
 
@@ -311,10 +381,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
           Date.now() - lastTappedInRef.current >
           DRAG_START_THRESHOLD_IN_MS
         ) {
-          socket?.emit('clicks', {
-            finger: 'left',
-            doubleTap: false,
-          });
+          sendWsMessage({type: 'clicks', finger: 'left', doubleTap: false});
           pendingLeftClick.current = false;
         }
       }
@@ -324,7 +391,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
         const dx = accX.value;
         const dy = accY.value;
         if (dx !== 0 || dy !== 0) {
-          socket?.emit('windowdragupdate', {
+          sendWsMessage({
+            type: 'windowdragupdate',
             x: dx * tS.current,
             y: dy * tS.current,
           });
@@ -333,14 +401,16 @@ export default function TouchpadScreen({navigation, route}: Props) {
         }
       } else if (accX.value !== 0 || accY.value !== 0) {
         pendingLeftClick.current = false;
-        socket?.emit('coordinates', {
+        sendWsMessage({
+          type: 'coordinates',
           x: accX.value * tS.current,
           y: accY.value * tS.current,
         });
         accX.value = 0;
         accY.value = 0;
       } else if (clickStateFinger.current) {
-        socket?.emit('clicks', {
+        sendWsMessage({
+          type: 'clicks',
           finger: clickStateFinger.current,
           doubleTap: clickStateIsDoubleTap.current,
         });
@@ -349,7 +419,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
       }
 
       if (accSX.value !== 0 || accSY.value !== 0) {
-        socket?.emit('scroll', {
+        sendWsMessage({
+          type: 'scroll',
           x: accSX.value * sS.current,
           y: accSY.value * sS.current,
         });
@@ -365,7 +436,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
     // drop any pre-drag residue so the drag starts exactly at the finger
     accX.value = 0;
     accY.value = 0;
-    socket?.emit('windowdragstart');
+    sendWsMessage({type: 'windowdragstart'});
   };
   const sendWindowDragEnd = () => {
     isDraggingRef.current = false;
@@ -373,32 +444,26 @@ export default function TouchpadScreen({navigation, route}: Props) {
     accY.value = 0;
     prevTX.value = 0;
     prevTY.value = 0;
-    socket?.emit('windowdragend');
+    sendWsMessage({type: 'windowdragend'});
   };
   const sendKey = (key: string) => {
-    socket?.emit('key', key);
+    sendWsMessage({type: 'key', key});
   };
   const sendMediaKey = (key: string) => {
-    socket?.emit('media-key', key);
+    sendWsMessage({type: 'media-key', key});
   };
   const sendEditKey = (payload: {key: string; modifier: string[]}) => {
-    socket?.emit('edit-key', {key: payload.key, modifier: payload.modifier});
+    sendWsMessage({type: 'edit-key', key: payload.key, modifier: payload.modifier});
   };
   const sendText = (text: string) => {
-    socket?.emit('text', text);
+    sendWsMessage({type: 'text', text});
   };
   const sendLeftClick = () => {
-    socket?.emit('clicks', {
-      finger: 'left',
-      doubleTap: false,
-    });
+    sendWsMessage({type: 'clicks', finger: 'left', doubleTap: false});
   };
 
   const sendRightClick = () => {
-    socket?.emit('clicks', {
-      finger: 'right',
-      doubleTap: false,
-    });
+    sendWsMessage({type: 'clicks', finger: 'right', doubleTap: false});
   };
 
   // mouse movement gesture handler
