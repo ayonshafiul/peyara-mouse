@@ -8,7 +8,7 @@ import {TurboModuleRegistry} from 'react-native';
 
 export interface Spec extends TurboModule {
   verify(fingerprintHex: string, baseUrl: string): Promise<string>;
-  connect(fingerprintHex: string, baseUrl: string): Promise<void>;
+  connect(fingerprintHex: string, baseUrl: string, pairCode: string): Promise<void>;
   disconnect(): void;
   send(message: string): void;
   addListener(eventName: string): void;

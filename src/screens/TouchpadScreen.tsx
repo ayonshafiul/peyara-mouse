@@ -37,6 +37,7 @@ import {
   DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
   DEFAULT_TOUCHPAD_SENSITIVITY,
   SERVER_FINGERPRINT_KEY,
+  SERVER_PAIRING_CODE_KEY,
   SERVER_URL_KEY,
   SETTINGS_TOUCHPAD_RESPONSE_RATE,
   SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
@@ -134,6 +135,10 @@ export default function TouchpadScreen({navigation, route}: Props) {
     () => route?.params?.fingerprint ?? getValueFor(SERVER_FINGERPRINT_KEY) ?? '',
     [route?.params],
   );
+  const pair = useMemo(
+    () => route?.params?.pair ?? getValueFor(SERVER_PAIRING_CODE_KEY) ?? '',
+    [route?.params],
+  );
   // Mirrors the native connection state (the module owns reconnecting).
   const connectedRef = useRef(false);
 
@@ -191,7 +196,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         // Reconnect on refocus (e.g. returning from Help/Settings) if the
         // native layer isn't connected. Uses the storage fallback too, so a
         // missing route param can't leave the screen blank with status ''.
-        if (serverUrl && fingerprint && !connectedRef.current) {
+        if (serverUrl && fingerprint && pair && !connectedRef.current) {
           plog(
             'Touchpad',
             `refocus connect url=${serverUrl} fp=${fpPreview(fingerprint)}`,
@@ -200,7 +205,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         } else {
           plog(
             'Touchpad',
-            `refocus skip connected=${connectedRef.current} hasUrl=${!!serverUrl} hasFp=${!!fingerprint}`,
+            `refocus skip connected=${connectedRef.current} hasUrl=${!!serverUrl} hasFp=${!!fingerprint} hasPair=${!!pair}`,
           );
         }
       }
@@ -231,6 +236,29 @@ export default function TouchpadScreen({navigation, route}: Props) {
         setLoading(false);
         showConnectedNotification();
         keyboardModalRef?.current?.present();
+      } else if (pinnedStatus === 'pairing-rejected') {
+        // Closed right after open: wrong/stale pairing code. The native
+        // layer already stopped retrying — prompt a re-scan instead.
+        connectedRef.current = false;
+        setStatus('Disconnected');
+        hideConnectedNotification();
+        setLoading(false);
+        Alert.alert(
+          'Pairing rejected',
+          'The desktop rejected the pairing code. Scan the QR code again or enter the code manually.',
+          [
+            {
+              text: 'Scan QR',
+              onPress: () =>
+                navigation.getParent()?.navigate('QRCode' as never),
+            },
+            {
+              text: 'Enter code',
+              onPress: () =>
+                navigation.getParent()?.navigate('PairingCode' as never),
+            },
+          ],
+        );
       } else {
         connectedRef.current = false;
         setStatus('Disconnected');
@@ -255,6 +283,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       deactivateKeepAwake();
       hideConnectedNotification();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Free rotation on the touchpad; every other screen locks to portrait on
@@ -267,15 +296,16 @@ export default function TouchpadScreen({navigation, route}: Props) {
   }, [isFocused, showLandscape, setShowBottomBar]);
 
   // Pinned-TLS connection via the native PeyaraSocket module (it owns
-  // reconnecting). Needs both the https base URL and the QR fingerprint.
+  // reconnecting). Needs the https base URL, the QR fingerprint and the
+  // pairing code — the native layer sends hello first on open.
   const connectSocket = async () => {
-    if (!serverUrl || !fingerprint) {
+    if (!serverUrl || !fingerprint || !pair) {
       plogError(
         'Touchpad',
-        `missing credentials hasUrl=${!!serverUrl} hasFp=${!!fingerprint}`,
+        `missing credentials hasUrl=${!!serverUrl} hasFp=${!!fingerprint} hasPair=${!!pair}`,
       );
       Alert.alert(
-        'Server certificate missing',
+        'Server pairing missing',
         'Please scan the QR code from the Peyara desktop app again.',
       );
       setLoading(false);
@@ -290,7 +320,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
     try {
       // Resolves once started; progress arrives via status events and the
       // native layer owns reconnecting from here on.
-      await connectPinned(fingerprint, serverUrl);
+      await connectPinned(fingerprint, serverUrl, pair);
       plog('Touchpad', 'connectPinned started');
     } catch (error) {
       // Invalid arguments; runtime failures arrive via status events.
@@ -307,6 +337,11 @@ export default function TouchpadScreen({navigation, route}: Props) {
     plog('Touchpad', 'manual disconnect');
     connectedRef.current = false;
     disconnectPinned();
+    // Drop the session credentials (fingerprint + code rotate together, so
+    // a stale session must never auto-reconnect — re-scan/re-tap instead).
+    setValueFor(SERVER_URL_KEY, '');
+    setValueFor(SERVER_FINGERPRINT_KEY, '');
+    setValueFor(SERVER_PAIRING_CODE_KEY, '');
     keyboardModalRef?.current?.dismiss();
     setClipboardVisible(false);
     hideConnectedNotification();

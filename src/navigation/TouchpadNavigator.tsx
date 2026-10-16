@@ -4,7 +4,7 @@ import TouchpadScreen from '../screens/TouchpadScreen';
 import HelpScreen from '../screens/HelpScreen';
 
 export type TouchpadStackParamList = {
-  TouchpadScreen: {serverUrl?: string; fingerprint?: string};
+  TouchpadScreen: {serverUrl?: string; fingerprint?: string; pair?: string};
   TouchpadHelp: undefined;
 };
 

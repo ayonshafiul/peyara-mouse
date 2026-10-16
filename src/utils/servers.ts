@@ -1,6 +1,10 @@
-import {QRCODE_SECRET, SERVER_KEY} from '../constants/settings';
+import {
+  QRCODE_SECRET,
+  SERVER_KEY,
+  MIN_DESKTOP_APP_VERSION,
+} from '../constants/settings';
 import {getValueFor, setValueFor} from './storage';
-import {major} from 'semver';
+import {gte} from 'semver';
 import {verifyPinnedServer} from '../native/PeyaraSocket';
 import {fpPreview, plog, plogError} from './logger';
 
@@ -53,24 +57,22 @@ export async function addServer(qrCodeValue: string): Promise<{
     `addServer fields=${fields.length} version=${appVersion} host=${hostName}`,
   );
 
-  // Protocol v2 requires the same major version as the desktop server.
-  let desktopMajor: number | null = null;
+  // The desktop app must be at least the minimum supported version.
   try {
-    desktopMajor = major(appVersion);
+    if (!gte(appVersion, MIN_DESKTOP_APP_VERSION)) {
+      plogError(
+        'QR',
+        `outdated desktop app version: ${appVersion} (min ${MIN_DESKTOP_APP_VERSION})`,
+      );
+      errorObject.error = true;
+      errorObject.errorTitle =
+        'Please update desktop app to the latest version and try again';
+      return errorObject;
+    }
   } catch {
-    desktopMajor = null;
-  }
-  if (desktopMajor === null) {
     plogError('QR', `unparseable version: ${appVersion}`);
     errorObject.error = true;
     errorObject.errorTitle = 'QRCode seems to be invalid';
-    return errorObject;
-  }
-  if (desktopMajor !== 2) {
-    plogError('QR', `unsupported major version: ${desktopMajor}`);
-    errorObject.error = true;
-    errorObject.errorTitle =
-      'Please update desktop app to the latest version and try again';
     return errorObject;
   }
 
@@ -100,6 +102,21 @@ export async function addServer(qrCodeValue: string): Promise<{
     return errorObject;
   }
 
+  const pairField = rest.find(f =>
+    f.trim().toLowerCase().startsWith('pair:'),
+  );
+  const pair = pairField
+    ? pairField.trim().slice('pair:'.length).toLowerCase()
+    : '';
+  const pairValid = /^[0-9a-f]{8}$/.test(pair);
+  plog('QR', `pairing code present=${!!pairField} valid=${pairValid}`);
+  if (!pairValid) {
+    errorObject.error = true;
+    errorObject.errorTitle =
+      'QRCode is missing a valid pairing code. Please scan the QR code again';
+    return errorObject;
+  }
+
   const urls = rest
     .map(f => f.trim().replace(/\/+$/, ''))
     .filter(f => f.toLowerCase().startsWith('https://'));
@@ -110,34 +127,61 @@ export async function addServer(qrCodeValue: string): Promise<{
     return errorObject;
   }
 
-  // Try all candidate urls: the first one passing certificate pinning +
-  // discovery verification wins. Plain fetch can't do the pinning, so the
-  // native module performs the pinned GET / check.
+  return pairWithCandidates({host: hostName, fingerprint, pair, urls});
+}
+
+export interface PairingInput {
+  host: string;
+  fingerprint: string;
+  pair: string;
+  urls: string[];
+}
+
+export interface PairingResult {
+  error: boolean;
+  errorTitle: string;
+}
+
+// Tries candidate urls in order: the first one passing certificate pinning +
+// discovery verification wins and is saved (url, host, fingerprint and
+// pairing code — they always rotate together). Plain fetch can't do the
+// pinning, so the native module performs the pinned GET / check.
+export async function pairWithCandidates(
+  input: PairingInput,
+): Promise<PairingResult> {
+  const {host, fingerprint, pair, urls} = input;
   let serverEntry: string | null = null;
   for (const url of urls) {
     try {
-      plog('QR', `verifying ${url} fp=${fpPreview(fingerprint)}`);
+      plog('TLS', `verifying ${url} fp=${fpPreview(fingerprint)}`);
       await verifyPinnedServer(fingerprint, url);
-      plog('QR', `verified ${url}`);
+      plog('TLS', `verified ${url}`);
       serverEntry =
-        url + QRCODE_SECRET + hostName + QRCODE_SECRET + fingerprint;
+        url +
+        QRCODE_SECRET +
+        host +
+        QRCODE_SECRET +
+        fingerprint +
+        QRCODE_SECRET +
+        pair;
       break;
     } catch (err) {
       plogError(
-        'QR',
+        'TLS',
         `verify failed ${url}: ${err instanceof Error ? err.message : String(err)}`,
       );
       // try next url
     }
   }
   if (!serverEntry) {
-    plogError('QR', 'no candidate url passed verification');
-    errorObject.error = true;
-    errorObject.errorTitle =
-      "Couldn't connect to server. Make sure this phone and the PC are on the same WiFi network";
-    return errorObject;
+    plogError('TLS', 'no candidate url passed verification');
+    return {
+      error: true,
+      errorTitle:
+        "Couldn't connect to server. Make sure this phone and the PC are on the same WiFi network",
+    };
   }
-  plog('QR', `server saved host=${hostName} url=${serverEntry.split(QRCODE_SECRET)[0]}`);
+  plog('QR', `server saved host=${host} url=${urlPartOf(serverEntry)}`);
   const servers = getValueFor(SERVER_KEY);
   if (servers) {
     try {
@@ -146,15 +190,46 @@ export async function addServer(qrCodeValue: string): Promise<{
       setValueFor(SERVER_KEY, JSON.stringify(serversArray));
     } catch {
       setValueFor(SERVER_KEY, JSON.stringify([]));
-      errorObject.error = true;
-      errorObject.errorTitle = "Couldn't save the server url";
-      return errorObject;
+      return {error: true, errorTitle: "Couldn't save the server url"};
     }
   } else {
     // initialize store with server value
     setValueFor(SERVER_KEY, JSON.stringify([serverEntry]));
   }
   return {error: false, errorTitle: ''};
+}
+
+function urlPartOf(serverEntry: string): string {
+  return serverEntry.split(QRCODE_SECRET)[0];
+}
+
+// Manual pairing (no camera): same flow as a QR scan but with typed-in
+// values. The desktop shows the URL, the fingerprint (with Copy button)
+// and the pairing code on screen.
+export async function pairManually(input: {
+  host?: string;
+  url: string;
+  fingerprint: string;
+  pair: string;
+}): Promise<PairingResult> {
+  const host = (input.host ?? '').trim() || 'Manual';
+  const url = input.url.trim().replace(/\/+$/, '');
+  const fingerprint = input.fingerprint.trim().toLowerCase();
+  const pair = input.pair.trim().toLowerCase();
+  if (!url.toLowerCase().startsWith('https://')) {
+    return {error: true, errorTitle: 'Server URL must start with https://'};
+  }
+  if (!/^[0-9a-f]{64}$/.test(fingerprint)) {
+    return {
+      error: true,
+      errorTitle: 'Fingerprint must be 64 hex characters',
+    };
+  }
+  if (!/^[0-9a-f]{8}$/.test(pair)) {
+    return {error: true, errorTitle: 'Pairing code must be 8 hex characters'};
+  }
+  plog('QR', `manual pairing host=${host} url=${url}`);
+  return pairWithCandidates({host, fingerprint, pair, urls: [url]});
 }
 
 export function setServers(serversArray: string[]): void {

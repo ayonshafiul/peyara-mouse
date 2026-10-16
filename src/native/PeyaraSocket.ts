@@ -8,7 +8,11 @@ import PeyaraSocket from '../../specs/NativePeyaraSocket';
 
 const emitter = new NativeEventEmitter(PeyaraSocket);
 
-export type PinnedStatus = 'connected' | 'disconnected' | 'unrecoverable';
+export type PinnedStatus =
+  | 'connected'
+  | 'disconnected'
+  | 'unrecoverable'
+  | 'pairing-rejected';
 
 /** Pinned HTTPS verification: GET <baseUrl>/ must return JSON "peyara". */
 export function verifyPinnedServer(
@@ -19,14 +23,16 @@ export function verifyPinnedServer(
 }
 
 /**
- * Starts the managed pinned connection. Resolves once started; connection
- * progress (including reconnects) arrives via onPinnedStatus.
+ * Starts the managed pinned connection. The native layer sends the
+ * {"type":"hello","pair":…} handshake first on open. Resolves once started;
+ * connection progress (including reconnects) arrives via onPinnedStatus.
  */
 export function connectPinned(
   fingerprintHex: string,
   baseUrl: string,
+  pairCode: string,
 ): Promise<void> {
-  return PeyaraSocket.connect(fingerprintHex, baseUrl);
+  return PeyaraSocket.connect(fingerprintHex, baseUrl, pairCode);
 }
 
 export function disconnectPinned(): void {
@@ -58,7 +64,8 @@ export function onPinnedStatus(callback: (status: PinnedStatus) => void) {
       if (
         status === 'connected' ||
         status === 'disconnected' ||
-        status === 'unrecoverable'
+        status === 'unrecoverable' ||
+        status === 'pairing-rejected'
       ) {
         callback(status);
       }

@@ -5,9 +5,11 @@ export const SERVER_URL_KEY = 'SERVER_URL';
 
 export const SERVER_FINGERPRINT_KEY = 'SERVER_FINGERPRINT';
 
+export const SERVER_PAIRING_CODE_KEY = 'SERVER_PAIR_CODE';
+
 export const QRCODE_SECRET = '<peyara>';
 
-export const MIN_DESKTOP_APP_VERSION = '2.0.0';
+export const MIN_DESKTOP_APP_VERSION = '2.1.0';
 
 export const SERVER_REST_RESPONSE = 'peyara';
 

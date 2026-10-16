@@ -27,9 +27,11 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
 @property (nonatomic, strong, nullable) NSURLSessionWebSocketTask *socketTask;
 @property (nonatomic, strong, nullable) NSData *fingerprint;
 @property (nonatomic, copy, nullable) NSString *baseUrl;
+@property (nonatomic, copy, nullable) NSString *pairCode;
 @property (nonatomic, assign) BOOL manualDisconnect;
 @property (nonatomic, assign) NSInteger attempts;
 @property (nonatomic, assign) NSInteger generation;
+@property (nonatomic, assign) NSTimeInterval openedAt;
 @property (nonatomic, assign) BOOL hasListeners;
 @property (nonatomic, copy, nullable) dispatch_block_t pendingReconnect;
 
@@ -154,9 +156,20 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
     CC_SHA256(der.bytes, (CC_LONG)der.length, digest);
     NSData *actual = [NSData dataWithBytes:digest length:sizeof(digest)];
     if (PeyaraConstantTimeEqual(actual, self.fingerprint)) {
-      NSURLCredential *credential = [NSURLCredential credentialForTrust:trust];
-      completionHandler(NSURLSessionAuthChallengeUseCredential, credential);
-      return;
+      // Fingerprint matches. Additionally verify the hostname normally:
+      // anchor only the leaf certificate and evaluate an SSL policy for
+      // the host, so the IP SANs are checked instead of blindly trusting.
+      SecPolicyRef sslPolicy = SecPolicyCreateSSL(true, (__bridge CFStringRef)challenge.protectionSpace.host);
+      SecTrustSetPolicies(trust, sslPolicy);
+      CFRelease(sslPolicy);
+      SecTrustSetAnchorCertificates(trust, (__bridge CFArrayRef)@[(__bridge id)leaf]);
+      SecTrustSetAnchorCertificatesOnly(trust, true);
+      CFErrorRef evalError = NULL;
+      if (SecTrustEvaluateWithError(trust, &evalError)) {
+        NSURLCredential *credential = [NSURLCredential credentialForTrust:trust];
+        completionHandler(NSURLSessionAuthChallengeUseCredential, credential);
+        return;
+      }
     }
   }
   completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
@@ -198,6 +211,14 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
 }
 
 - (void)handleDisconnect {
+  NSTimeInterval opened = self.openedAt;
+  self.openedAt = 0;
+  if (opened != 0 && [[NSDate date] timeIntervalSince1970] - opened < 1.5) {
+    // Closed right after open: the server rejected the pairing code
+    // (wrong/stale). Never retry-loop a dead code — prompt a re-scan.
+    [self sendStatus:@"pairing-rejected"];
+    return;
+  }
   [self sendStatus:@"disconnected"];
   [self scheduleReconnect];
 }
@@ -248,6 +269,16 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   }
   NSURLSessionWebSocketTask *task = [self.session webSocketTaskWithURL:url];
   self.socketTask = task;
+  self.openedAt = [[NSDate date] timeIntervalSince1970];
+  // Pairing handshake first: hello precedes every other frame. The code is a
+  // validated 8-hex string, so interpolation is safe. Sends before the
+  // handshake completes are buffered by the task, preserving order.
+  NSString *hello = [NSString stringWithFormat:@"{\"type\":\"hello\",\"pair\":\"%@\"}", self.pairCode ?: @""];
+  NSURLSessionWebSocketMessage *helloMessage = [[NSURLSessionWebSocketMessage alloc] initWithString:hello];
+  [task sendMessage:helloMessage
+    completionHandler:^(NSError *_Nullable error) {
+      // fire-and-forget; close handler reports state
+    }];
   [self sendStatus:@"connected"];
   [task resume];
   [self receiveNextWithGeneration:gen];
@@ -343,6 +374,7 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
 // progress arrives via status events.
 - (void)connect:(NSString *)fingerprintHex
             url:(NSString *)url
+           pair:(NSString *)pairCode
        resolver:(RCTPromiseResolveBlock)resolve
        rejecter:(RCTPromiseRejectBlock)reject {
   NSData *fp = [self dataFromHex:fingerprintHex];
@@ -355,6 +387,12 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
     reject(@"E_BAD_URL", @"url must use the https:// scheme", nil);
     return;
   }
+  NSString *code = [pairCode stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  NSCharacterSet *nonHex = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];
+  if (!code || code.length != 8 || [code rangeOfCharacterFromSet:nonHex].location != NSNotFound) {
+    reject(@"E_BAD_PAIR", @"pairing code must be 8 hex chars", nil);
+    return;
+  }
   [self cancelReconnect];
   [self teardownSocket];
   if (self.session) {
@@ -362,8 +400,10 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   }
   self.fingerprint = fp;
   self.baseUrl = base;
+  self.pairCode = code;
   self.manualDisconnect = NO;
   self.attempts = 0;
+  self.openedAt = 0;
   self.generation += 1;
   NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
   self.session = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];
@@ -375,6 +415,7 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   self.manualDisconnect = YES;
   [self cancelReconnect];
   self.generation += 1;
+  self.openedAt = 0;
   [self teardownSocket];
   if (self.session) {
     [self.session invalidateAndCancel];

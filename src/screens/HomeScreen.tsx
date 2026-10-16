@@ -17,6 +17,7 @@ import {
   QRCODE_SECRET,
   SERVER_DOWNLOAD_LINK,
   SERVER_FINGERPRINT_KEY,
+  SERVER_PAIRING_CODE_KEY,
   SERVER_URL_KEY,
 } from '../constants/settings';
 import {setValueFor} from '../utils/storage';
@@ -33,6 +34,7 @@ interface ServerItem {
   url: string;
   host: string;
   fingerprint: string;
+  pair: string;
 }
 
 type Props = NativeStackScreenProps<TabParamList, 'Home'>;
@@ -51,14 +53,17 @@ export default function HomeScreen({navigation}: Props) {
           const separatedArray = s?.split(QRCODE_SECRET);
           const url = separatedArray[0];
           const host = separatedArray[1];
-          // v2 entries carry the TLS fingerprint; legacy entries predate it
+          // v2 entries carry the TLS fingerprint + pairing code; legacy
+          // entries predate them and need a re-scan
           const fingerprint = separatedArray[2] ?? '';
+          const pair = separatedArray[3] ?? '';
           return {
             key: `key-${index + 1}`,
             urlData: s,
             url,
             host,
             fingerprint,
+            pair,
           };
         });
         setData(servers);
@@ -77,9 +82,14 @@ export default function HomeScreen({navigation}: Props) {
   const onPressConnect = (item: ServerItem) => {
     setValueFor(SERVER_URL_KEY, item?.url);
     setValueFor(SERVER_FINGERPRINT_KEY, item?.fingerprint ?? '');
+    setValueFor(SERVER_PAIRING_CODE_KEY, item?.pair ?? '');
     navigation.navigate('Touchpad', {
       screen: 'TouchpadScreen',
-      params: {serverUrl: item?.url, fingerprint: item?.fingerprint ?? ''},
+      params: {
+        serverUrl: item?.url,
+        fingerprint: item?.fingerprint ?? '',
+        pair: item?.pair ?? '',
+      },
     });
   };
 

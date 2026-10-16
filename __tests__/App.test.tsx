@@ -2,7 +2,7 @@
  * @format
  */
 
-import {addServer, getServers} from '../src/utils/servers';
+import {addServer, getServers, pairManually} from '../src/utils/servers';
 import {QRCODE_SECRET} from '../src/constants/settings';
 
 jest.mock('../src/utils/storage', () => {
@@ -34,8 +34,9 @@ jest.mock('../src/native/PeyaraSocket', () => ({
 }));
 
 const TEST_FP = 'ab'.repeat(32); // 64 hex chars
+const TEST_PAIR = 'ab12cd34'; // 8 hex chars
 const validQR = (extra = '') =>
-  `2.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},https://192.168.1.5:1313/${extra}`;
+  `2.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/${extra}`;
 
 describe('QR server validation (pinned-TLS client)', () => {
   beforeEach(() => {
@@ -85,6 +86,31 @@ describe('QR server validation (pinned-TLS client)', () => {
     expect(res.errorTitle).toMatch(/fingerprint/i);
   });
 
+  test('rejects missing pairing code', async () => {
+    const res = await addServer(
+      `2.0.0,${QRCODE_SECRET},host,sha256:${TEST_FP},https://x`,
+    );
+    expect(res.error).toBe(true);
+    expect(res.errorTitle).toMatch(/pairing code/i);
+  });
+
+  test('rejects malformed pairing code', async () => {
+    const res = await addServer(
+      `2.0.0,${QRCODE_SECRET},host,sha256:${TEST_FP},pair:xyz,https://x`,
+    );
+    expect(res.error).toBe(true);
+    expect(res.errorTitle).toMatch(/pairing code/i);
+  });
+
+  test('accepts newer versions above the floor (no major pin)', async () => {
+    const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
+    verifyPinnedServer.mockResolvedValue('"peyara"');
+    const res = await addServer(
+      `3.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/`,
+    );
+    expect(res.error).toBe(false);
+  });
+
   test('accepts valid QR after pinned verification', async () => {
     const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
     verifyPinnedServer.mockResolvedValue('"peyara"');
@@ -105,6 +131,52 @@ describe('QR server validation (pinned-TLS client)', () => {
     const res = await addServer(validQR(',https://192.168.1.6:1313/'));
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/Couldn't connect/);
+  });
+
+  test('manual pairing validates fields locally', async () => {
+    const badFp = await pairManually({
+      url: 'https://192.168.1.5:1313',
+      fingerprint: 'xyz',
+      pair: TEST_PAIR,
+    });
+    expect(badFp.error).toBe(true);
+    expect(badFp.errorTitle).toMatch(/Fingerprint/);
+
+    const badPair = await pairManually({
+      url: 'https://192.168.1.5:1313',
+      fingerprint: TEST_FP,
+      pair: 'xyz',
+    });
+    expect(badPair.error).toBe(true);
+    expect(badPair.errorTitle).toMatch(/Pairing code/);
+
+    const badUrl = await pairManually({
+      url: 'http://192.168.1.5:1313',
+      fingerprint: TEST_FP,
+      pair: TEST_PAIR,
+    });
+    expect(badUrl.error).toBe(true);
+    expect(badUrl.errorTitle).toMatch(/https/);
+  });
+
+  test('manual pairing saves after pinned verification', async () => {
+    const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
+    verifyPinnedServer.mockResolvedValue('"peyara"');
+    const res = await pairManually({
+      host: 'manual-pc',
+      url: 'https://192.168.1.5:1313/',
+      fingerprint: TEST_FP.toUpperCase(),
+      pair: TEST_PAIR.toUpperCase(),
+    });
+    expect(res.error).toBe(false);
+    expect(verifyPinnedServer).toHaveBeenCalledWith(
+      TEST_FP,
+      'https://192.168.1.5:1313',
+    );
+    const servers = getServers();
+    expect(servers.length).toBe(1);
+    expect(servers[0]).toContain(TEST_FP);
+    expect(servers[0]).toContain(TEST_PAIR);
   });
 
 jest.mock('react-native-notify-kit', () => ({

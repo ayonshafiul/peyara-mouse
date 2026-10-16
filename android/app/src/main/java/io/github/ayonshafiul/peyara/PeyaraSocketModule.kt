@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
+import android.os.SystemClock
 
 /**
  * Pinned-TLS transport for the Peyara desktop server (protocol v2).
@@ -48,8 +49,12 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
     const val STATUS_CONNECTED = "connected"
     const val STATUS_DISCONNECTED = "disconnected"
     const val STATUS_UNRECOVERABLE = "unrecoverable"
+    const val STATUS_PAIRING_REJECTED = "pairing-rejected"
     const val MAX_ATTEMPTS = 8
     const val MAX_DELAY_MS = 30000L
+    // A close within this window after open means the server rejected the
+    // pairing code (wrong/stale) — never retry-loop a dead code.
+    const val PAIRING_CLOSE_WINDOW_MS = 1500L
   }
 
   private val scheduler = Executors.newSingleThreadScheduledExecutor()
@@ -59,9 +64,11 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
   @Volatile private var webSocket: WebSocket? = null
   @Volatile private var fingerprint: ByteArray? = null
   @Volatile private var baseUrl: String? = null
+  @Volatile private var pairCode: String? = null
   @Volatile private var manualDisconnect = false
   @Volatile private var attempts = 0
   @Volatile private var generation = 0
+  @Volatile private var openedAtMs = 0L
   private var reconnectTask: ScheduledFuture<*>? = null
 
   override fun getName() = NAME
@@ -105,8 +112,9 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
     sslContext.init(null, arrayOf(trustManager), SecureRandom())
     return OkHttpClient.Builder()
       .sslSocketFactory(sslContext.socketFactory, trustManager)
-      // Pinning replaces hostname verification (LAN IPs, self-signed cert).
-      .hostnameVerifier { _, _ -> true }
+      // No permissive hostname verifier: the default OkHostnameVerifier
+      // validates the IP SANs normally, and the leaf-hash pin above is the
+      // trust decision.
       .connectTimeout(5, TimeUnit.SECONDS)
       .readTimeout(5, TimeUnit.SECONDS)
       .build()
@@ -173,7 +181,12 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
    * reconnects with backoff on drops. Resolves once started; connection
    * progress arrives via status events.
    */
-  override fun connect(fingerprintHex: String, url: String, promise: Promise) {
+  override fun connect(
+    fingerprintHex: String,
+    url: String,
+    pairCode: String,
+    promise: Promise,
+  ) {
     val fp = parseFingerprint(fingerprintHex)
     if (fp == null) {
       promise.reject("E_BAD_FINGERPRINT", "fingerprint must be 64 hex chars")
@@ -184,12 +197,19 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
       promise.reject("E_BAD_URL", "url must use the https:// scheme")
       return
     }
+    val code = pairCode.trim()
+    if (!code.matches(Regex("[0-9a-fA-F]{8}"))) {
+      promise.reject("E_BAD_PAIR", "pairing code must be 8 hex chars")
+      return
+    }
     cancelReconnect()
     closeSilently()
     fingerprint = fp
     baseUrl = base
+    this.pairCode = code
     manualDisconnect = false
     attempts = 0
+    openedAtMs = 0L
     generation++
     httpClient = try {
       pinnedClient(fp)
@@ -223,6 +243,7 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
     val client = httpClient ?: return
     val target = wssUrl() ?: return
     val gen = generation
+    openedAtMs = 0L
     val request = Request.Builder().url(target).build()
     webSocket = client.newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -230,6 +251,14 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
           return
         }
         attempts = 0
+        openedAtMs = SystemClock.elapsedRealtime()
+        // Pairing handshake first: hello precedes every other frame.
+        // The code is validated 8-hex, so interpolation is safe.
+        try {
+          webSocket.send("{\"type\":\"hello\",\"pair\":\"${pairCode ?: ""}\"}")
+        } catch (_: Exception) {
+          // close handler reports state
+        }
         emitStatus(STATUS_CONNECTED)
       }
 
@@ -260,6 +289,16 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
       return
     }
     webSocket = null
+    val opened = openedAtMs
+    openedAtMs = 0L
+    if (opened != 0L &&
+      SystemClock.elapsedRealtime() - opened < PAIRING_CLOSE_WINDOW_MS
+    ) {
+      // Closed right after open: the server rejected the pairing code
+      // (wrong/stale). Never retry-loop a dead code — prompt a re-scan.
+      emitStatus(STATUS_PAIRING_REJECTED)
+      return
+    }
     emitStatus(STATUS_DISCONNECTED)
     scheduleReconnect()
   }
