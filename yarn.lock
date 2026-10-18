@@ -2325,6 +2325,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@pushpendersingh/react-native-scanner@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "@pushpendersingh/react-native-scanner@npm:3.1.0"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: e58550802c13a321c990e7b9d24244f185bc34062eef3b8949742dbdad512c6e8c54fd44b3967d8e3748ac7f9f6cc8d3f62c8259ef37b43967d06eedd1bb1c37
+  languageName: node
+  linkType: hard
+
 "@react-native-clipboard/clipboard@npm:^1.16.3":
   version: 1.16.3
   resolution: "@react-native-clipboard/clipboard@npm:1.16.3"
@@ -6057,6 +6067,7 @@ __metadata:
     "@babel/preset-env": ^7.25.3
     "@babel/runtime": ^7.25.0
     "@gorhom/bottom-sheet": ^5.2.14
+    "@pushpendersingh/react-native-scanner": ^3.1.0
     "@react-native-clipboard/clipboard": ^1.16.3
     "@react-native-community/cli": 20.2.0
     "@react-native-community/cli-platform-android": 20.2.0
@@ -6096,8 +6107,6 @@ __metadata:
     react-native-svg: ^15.15.5
     react-native-svg-transformer: ^1.5.3
     react-native-vector-icons: ^10.3.0
-    react-native-vision-camera: ^5.2.3
-    react-native-vision-camera-barcode-scanner: ^5.2.3
     react-native-worklets: ^0.13.0
     react-test-renderer: 19.2.3
     semver: ^7.8.5
@@ -8626,37 +8635,6 @@ __metadata:
     fa6-upgrade: bin/fa6-upgrade.sh
     generate-icon: bin/generate-icon.js
   checksum: 5c431fd9a8e6efd355e34ed28ca7fa7eed30e89362280cbd1e474e6d16148c6c37f5c950a525ec0b428c79dc74b9fb7a61171fc509b6ab253e111456f3e49b71
-  languageName: node
-  linkType: hard
-
-"react-native-vision-camera-barcode-scanner@npm:^5.2.3":
-  version: 5.2.3
-  resolution: "react-native-vision-camera-barcode-scanner@npm:5.2.3"
-  peerDependencies:
-    react: "*"
-    react-native: "*"
-    react-native-nitro-image: "*"
-    react-native-nitro-modules: "*"
-    react-native-vision-camera: "*"
-  peerDependenciesMeta:
-    react-native-nitro-modules:
-      optional: true
-  checksum: 8ff49a26bd1c4c49862076e16c0125d82eb01445819de9974263855d10558b9853a016e105e9fae06d806bd13f5ec0c0a833e49fa50f88b28c1c4ac50a3b3d87
-  languageName: node
-  linkType: hard
-
-"react-native-vision-camera@npm:^5.2.3":
-  version: 5.2.3
-  resolution: "react-native-vision-camera@npm:5.2.3"
-  peerDependencies:
-    react: "*"
-    react-native: "*"
-    react-native-nitro-image: "*"
-    react-native-nitro-modules: "*"
-  peerDependenciesMeta:
-    react-native-nitro-modules:
-      optional: true
-  checksum: 5b8be90814e9f3e4e43f8ede7043cc6b306fac0f385fdef55cdb4454d6590099f8a6e4aaa4c643649893dc9743324c999d51882295929ed5528465baa460e49a
   languageName: node
   linkType: hard
 

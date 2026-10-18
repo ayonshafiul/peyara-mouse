@@ -3,7 +3,8 @@
  */
 
 import {addServer, getServers, pairManually} from '../src/utils/servers';
-import {QRCODE_SECRET} from '../src/constants/settings';
+import {MIN_DESKTOP_APP_VERSION, QRCODE_SECRET} from '../src/constants/settings';
+import {major} from 'semver';
 
 jest.mock('../src/utils/storage', () => {
   const store: Record<string, string> = {};
@@ -36,7 +37,9 @@ jest.mock('../src/native/PeyaraSocket', () => ({
 const TEST_FP = 'ab'.repeat(32); // 64 hex chars
 const TEST_PAIR = 'ab12cd34'; // 8 hex chars
 const validQR = (extra = '') =>
-  `2.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/${extra}`;
+  `${MIN_DESKTOP_APP_VERSION},${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/${extra}`;
+const newerMajorQR = (extra = '') =>
+  `${major(MIN_DESKTOP_APP_VERSION) + 1}.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/${extra}`;
 
 describe('QR server validation (pinned-TLS client)', () => {
   beforeEach(() => {
@@ -64,7 +67,7 @@ describe('QR server validation (pinned-TLS client)', () => {
 
   test('rejects wrong secret', async () => {
     const res = await addServer(
-      `2.0.0,<wrong-secret>,host,sha256:${TEST_FP},https://x`,
+      `${MIN_DESKTOP_APP_VERSION},<wrong-secret>,host,sha256:${TEST_FP},https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/Peyara Desktop App/);
@@ -72,7 +75,7 @@ describe('QR server validation (pinned-TLS client)', () => {
 
   test('rejects missing fingerprint', async () => {
     const res = await addServer(
-      `2.0.0,${QRCODE_SECRET},host,extra-field,https://x`,
+      `${MIN_DESKTOP_APP_VERSION},${QRCODE_SECRET},host,extra-field,https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/fingerprint/i);
@@ -80,7 +83,7 @@ describe('QR server validation (pinned-TLS client)', () => {
 
   test('rejects malformed fingerprint', async () => {
     const res = await addServer(
-      `2.0.0,${QRCODE_SECRET},host,sha256:xyz,https://x`,
+      `${MIN_DESKTOP_APP_VERSION},${QRCODE_SECRET},host,sha256:xyz,https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/fingerprint/i);
@@ -88,7 +91,7 @@ describe('QR server validation (pinned-TLS client)', () => {
 
   test('rejects missing pairing code', async () => {
     const res = await addServer(
-      `2.0.0,${QRCODE_SECRET},host,sha256:${TEST_FP},https://x`,
+      `${MIN_DESKTOP_APP_VERSION},${QRCODE_SECRET},host,sha256:${TEST_FP},https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/pairing code/i);
@@ -96,7 +99,7 @@ describe('QR server validation (pinned-TLS client)', () => {
 
   test('rejects malformed pairing code', async () => {
     const res = await addServer(
-      `2.0.0,${QRCODE_SECRET},host,sha256:${TEST_FP},pair:xyz,https://x`,
+      `${MIN_DESKTOP_APP_VERSION},${QRCODE_SECRET},host,sha256:${TEST_FP},pair:xyz,https://x`,
     );
     expect(res.error).toBe(true);
     expect(res.errorTitle).toMatch(/pairing code/i);
@@ -105,9 +108,7 @@ describe('QR server validation (pinned-TLS client)', () => {
   test('accepts newer versions above the floor (no major pin)', async () => {
     const {verifyPinnedServer} = require('../src/native/PeyaraSocket');
     verifyPinnedServer.mockResolvedValue('"peyara"');
-    const res = await addServer(
-      `3.0.0,${QRCODE_SECRET},shafiul-pc,sha256:${TEST_FP},pair:${TEST_PAIR},https://192.168.1.5:1313/`,
-    );
+    const res = await addServer(newerMajorQR());
     expect(res.error).toBe(false);
   });
 

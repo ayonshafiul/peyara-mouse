@@ -9,11 +9,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Camera, useCameraPermission} from 'react-native-vision-camera';
 import {
-  useBarcodeScannerOutput,
-  type Barcode,
-} from 'react-native-vision-camera-barcode-scanner';
+  BarcodeScanner,
+  CameraView,
+  type BarcodeResult,
+} from '@pushpendersingh/react-native-scanner';
 import Clipboard from '@react-native-clipboard/clipboard';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../constants/colors';
@@ -28,18 +28,41 @@ import type {RootStackParamList} from '../navigation/RootNavigator';
 type Props = NativeStackScreenProps<RootStackParamList, 'QRCode'>;
 
 export default function QRCodeScreen({navigation}: Props) {
-  const {hasPermission, requestPermission} = useCameraPermission();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [active, setActive] = useState(true);
   const handlingRef = useRef(false);
+
+  const checkPermission = useCallback(async () => {
+    try {
+      const granted = await BarcodeScanner.hasCameraPermission();
+      setHasPermission(granted);
+    } catch (error) {
+      plogError(
+        'QR',
+        `hasCameraPermission failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      setHasPermission(false);
+    }
+  }, []);
+
+  const requestPermission = useCallback(async () => {
+    try {
+      const granted = await BarcodeScanner.requestCameraPermission();
+      setHasPermission(granted);
+    } catch (error) {
+      plogError(
+        'QR',
+        `requestCameraPermission failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      setHasPermission(false);
+    }
+  }, []);
 
   useEffect(() => {
     Orientation.lockToPortrait();
-    if (!hasPermission) {
-      requestPermission();
-    }
-  }, [hasPermission, requestPermission]);
+    checkPermission();
+  }, [checkPermission]);
 
   const handleBarCodeScanned = useCallback(
     async (data: string) => {
@@ -48,7 +71,14 @@ export default function QRCodeScreen({navigation}: Props) {
       }
       handlingRef.current = true;
       setLoading(true);
-      setActive(false);
+      try {
+        await BarcodeScanner.stopScanning();
+      } catch (err) {
+        plogError(
+          'QR',
+          `stopScanning failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
       plog('QR', `scan received len=${data.length}`);
       const {error, errorTitle} = await addServer(data);
       setLoading(false);
@@ -65,9 +95,9 @@ export default function QRCodeScreen({navigation}: Props) {
     [navigation],
   );
 
-  const onBarcodeScanned = useCallback(
-    (barcodes: Barcode[]) => {
-      const value = barcodes[0]?.rawValue;
+  const onBarcodesDetected = useCallback(
+    (barcodes: BarcodeResult[]) => {
+      const value = barcodes[0]?.data;
       if (value) {
         handleBarCodeScanned(value);
       }
@@ -75,9 +105,29 @@ export default function QRCodeScreen({navigation}: Props) {
     [handleBarCodeScanned],
   );
 
-  const onError = useCallback((error: Error) => {
-    console.error('Barcode scanner error:', error);
-  }, []);
+  useEffect(() => {
+    if (!hasPermission) {
+      return;
+    }
+    let cancelled = false;
+    BarcodeScanner.startScanning((barcodes: BarcodeResult[]) => {
+      if (!cancelled) {
+        onBarcodesDetected(barcodes);
+      }
+    }).catch(error => {
+      if (!cancelled) {
+        plogError(
+          'QR',
+          `startScanning failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+      BarcodeScanner.stopScanning().catch(() => undefined);
+      BarcodeScanner.releaseCamera().catch(() => undefined);
+    };
+  }, [hasPermission, onBarcodesDetected]);
 
   const openServerDownloadLink = useCallback(() => {
     Linking.openURL(SERVER_DOWNLOAD_LINK);
@@ -88,19 +138,32 @@ export default function QRCodeScreen({navigation}: Props) {
     Alert.alert('Link Copied');
   }, []);
 
-  // NOTE: we intentionally pass device="back" as a string instead of
-  // useCameraDevice('back'): the device factory loads asynchronously, and
-  // resolving the position natively avoids throwing while it initializes.
-  const barcodeOutput = useBarcodeScannerOutput({
-    barcodeFormats: ['qr-code'],
-    onBarcodeScanned,
-    onError,
-  });
+  const scanAgain = useCallback(() => {
+    setScanned(false);
+    handlingRef.current = false;
+    BarcodeScanner.startScanning((barcodes: BarcodeResult[]) => {
+      onBarcodesDetected(barcodes);
+    }).catch(error => {
+      plogError(
+        'QR',
+        `startScanning failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }, [onBarcodesDetected]);
+
+  if (hasPermission === null) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size={'large'} color={colors.PRIM_ACCENT} />
+        <Text style={styles.text}>Checking camera permission</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!hasPermission) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.text}>Requesting for camera permission</Text>
+        <Text style={styles.text}>Camera permission is required to scan</Text>
         <AppButton text={'Grant Permission'} onPress={requestPermission} />
         <AppButton text={'Cancel'} onPress={() => navigation.goBack()} />
       </SafeAreaView>
@@ -111,13 +174,7 @@ export default function QRCodeScreen({navigation}: Props) {
     <SafeAreaView style={styles.container}>
       <View style={styles.innerContainer}>
         {!scanned && !loading && (
-          <Camera
-            style={styles.barcodeContainer}
-            device="back"
-            isActive={active}
-            outputs={[barcodeOutput]}
-            onError={onError}
-          />
+          <CameraView style={styles.barcodeContainer} />
         )}
         {loading && (
           <ActivityIndicator size={'large'} color={colors.PRIM_ACCENT} />
@@ -127,13 +184,7 @@ export default function QRCodeScreen({navigation}: Props) {
         )}
       </View>
       {scanned && !loading && (
-        <AppButton
-          text={'Scan Again'}
-          onPress={() => {
-            setScanned(false);
-            setActive(true);
-          }}
-        />
+        <AppButton text={'Scan Again'} onPress={scanAgain} />
       )}
       <View style={styles.downloadContainer}>
         <Text style={styles.downloadPrompt}>
