@@ -21,7 +21,7 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   return diff == 0;
 }
 
-@interface PeyaraSocket ()
+@interface PeyaraSocket () <NSURLSessionDelegate>
 
 @property (nonatomic, strong, nullable) NSURLSession *session;
 @property (nonatomic, strong, nullable) NSURLSessionWebSocketTask *socketTask;
@@ -198,9 +198,11 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   NSTimeInterval delay = MIN((NSTimeInterval)(1 << attempt), kMaxDelaySeconds) +
       ((NSTimeInterval)arc4random_uniform(500) / 1000.0);
   NSInteger gen = self.generation;
-  __weak typeof(self) weakSelf = self;
-  dispatch_block_t block = dispatch_block_create(0, ^{
-    __strong typeof(self) strongSelf = weakSelf;
+  __weak __typeof__(self) weakSelf = self;
+  // Flags must be explicitly cast: in ObjC++ the literal 0 (int) won't
+  // implicitly convert to the enum-typed dispatch_block_flags_t.
+  dispatch_block_t block = dispatch_block_create((dispatch_block_flags_t)0, ^{
+    __strong __typeof__(self) strongSelf = weakSelf;
     if (!strongSelf || strongSelf.manualDisconnect || gen != strongSelf.generation) {
       return;
     }
@@ -237,10 +239,10 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
     [self handleDisconnect];
     return;
   }
-  __weak typeof(self) weakSelf = self;
+  __weak __typeof__(self) weakSelf = self;
   [[self.session dataTaskWithURL:verifyURL
                completionHandler:^(NSData *_Nullable data, NSURLResponse *_Nullable response, NSError *_Nullable error) {
-                 __strong typeof(self) strongSelf = weakSelf;
+                 __strong __typeof__(self) strongSelf = weakSelf;
                  if (!strongSelf || gen != strongSelf.generation) {
                    return;
                  }
@@ -289,9 +291,9 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
   if (!task) {
     return;
   }
-  __weak typeof(self) weakSelf = self;
+  __weak __typeof__(self) weakSelf = self;
   [task receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *_Nullable message, NSError *_Nullable error) {
-    __strong typeof(self) strongSelf = weakSelf;
+    __strong __typeof__(self) strongSelf = weakSelf;
     if (!strongSelf || gen != strongSelf.generation) {
       return;
     }
@@ -327,15 +329,15 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
 // Pinned HTTPS verification: GET <baseUrl>/ must return JSON "peyara".
 // Used when scanning a QR code to pick a working candidate URL.
 - (void)verify:(NSString *)fingerprintHex
-           url:(NSString *)url
-      resolver:(RCTPromiseResolveBlock)resolve
-      rejecter:(RCTPromiseRejectBlock)reject {
+       baseUrl:(NSString *)baseUrl
+        resolve:(RCTPromiseResolveBlock)resolve
+         reject:(RCTPromiseRejectBlock)reject {
   NSData *fp = [self dataFromHex:fingerprintHex];
   if (!fp) {
     reject(@"E_BAD_FINGERPRINT", @"fingerprint must be 64 hex chars", nil);
     return;
   }
-  NSString *base = [self trimmedBaseUrl:url ?: @""];
+  NSString *base = [self trimmedBaseUrl:baseUrl ?: @""];
   if (![[base lowercaseString] hasPrefix:@"https://"]) {
     reject(@"E_BAD_URL", @"url must use the https:// scheme", nil);
     return;
@@ -373,16 +375,16 @@ static BOOL PeyaraConstantTimeEqual(NSData *a, NSData *b) {
 // reconnects with backoff on drops. Resolves once started; connection
 // progress arrives via status events.
 - (void)connect:(NSString *)fingerprintHex
-            url:(NSString *)url
-           pair:(NSString *)pairCode
-       resolver:(RCTPromiseResolveBlock)resolve
-       rejecter:(RCTPromiseRejectBlock)reject {
+        baseUrl:(NSString *)baseUrl
+       pairCode:(NSString *)pairCode
+         resolve:(RCTPromiseResolveBlock)resolve
+          reject:(RCTPromiseRejectBlock)reject {
   NSData *fp = [self dataFromHex:fingerprintHex];
   if (!fp) {
     reject(@"E_BAD_FINGERPRINT", @"fingerprint must be 64 hex chars", nil);
     return;
   }
-  NSString *base = [self trimmedBaseUrl:url ?: @""];
+  NSString *base = [self trimmedBaseUrl:baseUrl ?: @""];
   if (![[base lowercaseString] hasPrefix:@"https://"]) {
     reject(@"E_BAD_URL", @"url must use the https:// scheme", nil);
     return;
