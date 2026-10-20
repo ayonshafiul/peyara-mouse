@@ -9,7 +9,7 @@ export const SERVER_PAIRING_CODE_KEY = 'SERVER_PAIR_CODE';
 
 export const QRCODE_SECRET = '<peyara>';
 
-export const MIN_DESKTOP_APP_VERSION = '2.3.0';
+export const MIN_DESKTOP_APP_VERSION = '2.4.0';
 
 export const SERVER_REST_RESPONSE = 'peyara';
 
