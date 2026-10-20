@@ -116,7 +116,31 @@ export async function fetchDeckActions(
       return data;
     }
     return cached;
-  } catch {
+  } catch (e) {
+    // Linux presets often don't exist yet — fall back to the Windows preset
+    // when the linux file is missing (404), since shortcuts are usually
+    // identical (Ctrl-based) on Linux.
+    if (
+      normalizedOs === 'linux' &&
+      e instanceof Error &&
+      e.message.includes('-> 404')
+    ) {
+      try {
+        const fallback = await fetchJson<DeckAction[]>(
+          `${DECK_REPO_BASE}/apps/${slug}_windows.json`,
+        );
+        if (Array.isArray(fallback)) {
+          writeCache(cacheKey, fallback);
+          return fallback;
+        }
+      } catch {
+        // Fall through to cache below.
+      }
+      const windowsCached = readCache<DeckAction[]>(
+        `${DECK_CACHE_PREFIX}${slug}_windows`,
+      );
+      return windowsCached ?? cached;
+    }
     return cached;
   }
 }
