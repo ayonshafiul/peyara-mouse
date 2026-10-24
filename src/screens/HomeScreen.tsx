@@ -160,7 +160,8 @@ export default function HomeScreen({navigation}: Props) {
                     app.
                   </Text>
                   <Text style={styles.downloadPrompt}>
-                    Download the server app for Windows, MacOS or Linux:
+                    If you haven't downloaded the desktop server app yet,
+                    download it for Windows, MacOS or Linux:
                   </Text>
                   <Text
                     style={styles.linkText}

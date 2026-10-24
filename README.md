@@ -4,7 +4,7 @@
 
 [![Download iOS app from App Store](https://peyara-remote-mouse.vercel.app/img/appstore.png)](https://apps.apple.com/us/app/peyara-remote-mouse/id6743374036)
 
-## Wifi Remote Mouse for your Windows/Linux/Mac PCs.
+## Wifi Remote Mouse + free Stream Deck for your Windows/Linux/Mac PCs.
 
 <p align="center"><img src="https://peyara-remote-mouse.vercel.app/img/client-logo.png" alt="Logo" width="250"></p>
 
@@ -18,6 +18,8 @@
 - Landscape and portrait touchpad with side scroll wheel
 - Full keyboard, arrow / function keys and text input
 - Media keys and clipboard send/receive
+- Free Stream Deck with hundreds of app presets, auto-following the focused desktop app
+- Import and curate your own action set per app — search, multi-select, custom columns, drag-to-reorder
 - Adjustable touchpad sensitivity, scroll sensitivity and response rate
 - QR code pairing with saved servers list
 
@@ -30,7 +32,15 @@
 <img src="https://peyara-remote-mouse.vercel.app/img/settings.png" alt="Settings" width="150">
 </div>
 
-## Turn your mobile into a wireless mouse and keyboard combo with Peyara Remote Mouse in 4 easy steps.
+## Free Stream Deck for Mobile
+
+Turn your phone into a free Stream Deck for your PC: open the Deck from the touchpad, pick your app (or let it auto-follow the focused desktop app), and tap to fire shortcuts and macros. Ships with hundreds of ready-made presets for popular desktop apps, with per-app action search, custom column layouts, drag-to-reorder, and import-your-own selection — all persisted on device.
+
+### Missing a preset for your app?
+
+All presets live in the open [peyara-actions](https://github.com/ayonshafiul/peyara-actions) repo. To add your desired app, open a pull request there with a new preset following the existing format.
+
+## Turn your mobile into a wireless mouse, keyboard and Stream Deck combo with Peyara Remote Mouse in 4 easy steps.
 
 ### Step 1. Download Desktop Server on Windows/Linux/Mac from
 
@@ -50,7 +60,7 @@ https://peyara-remote-mouse.vercel.app/
 
 <img src="https://peyara-remote-mouse.vercel.app/img/scan-qr.png" alt="Scan QR" width="150">
 
-Follow the initial onboarding steps to get started!
+Connect, then open the Deck from the touchpad to fire shortcuts for the app in focus!
 
 ## Development
 
@@ -79,10 +89,6 @@ yarn ios
 [react-native-gesture-handler](https://github.com/software-mansion/react-native-gesture-handler)
 
 [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv)
-
-[react-native-vision-camera](https://github.com/mrousavy/react-native-vision-camera)
-
-[pinned-TLS native networking (OkHttp / URLSession)](https://github.com/ayonshafiul/peyara-mouse)
 
 ## Icons
 

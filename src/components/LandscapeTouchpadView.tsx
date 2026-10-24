@@ -22,6 +22,7 @@ interface LandscapeTouchpadViewProps {
   sendLeftClick: () => void;
   sendRightClick: () => void;
   onShowControls: () => void;
+  onTouchpadLayout?: (width: number, height: number) => void;
 }
 
 export default function LandscapeTouchpadView({
@@ -31,6 +32,7 @@ export default function LandscapeTouchpadView({
   sendLeftClick,
   sendRightClick,
   onShowControls,
+  onTouchpadLayout,
 }: LandscapeTouchpadViewProps) {
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const insets = useSafeAreaInsets();
@@ -64,7 +66,15 @@ export default function LandscapeTouchpadView({
         {/* Touchpad with the settings gear in its bottom-right corner */}
         <View style={styles.touchpadWrapper}>
           <GestureDetector gesture={composed}>
-            <Animated.View style={styles.touchpad} />
+            <Animated.View
+              style={styles.touchpad}
+              onLayout={e =>
+                onTouchpadLayout?.(
+                  e.nativeEvent.layout.width,
+                  e.nativeEvent.layout.height,
+                )
+              }
+            />
           </GestureDetector>
           {/* Re-show the top controls (they auto-hide in landscape) */}
           <RoundKey containerStyle={styles.settings} onPress={onShowControls}>

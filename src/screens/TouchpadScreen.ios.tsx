@@ -120,6 +120,10 @@ const DOUBLE_TAP_WINDOW_MS = 500;
 // fails on movement)
 const DRAG_TOUCH_DOWN_WINDOW_IN_MS = 300;
 const MAX_TRANSLATE_Y = 180;
+// Thumb displacement (px) past which a held scroll wheel auto-repeats,
+// and the pre-sensitivity scroll amount emitted per send tick at full pull.
+const SCROLL_REPEAT_DEADZONE = 12;
+const SCROLL_REPEAT_PER_TICK = 8;
 
 type Props = NativeStackScreenProps<TouchpadStackParamList, 'TouchpadScreen'>;
 
@@ -167,6 +171,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const prevSY = useSharedValue(0);
   // scroll-wheel thumb previous position (that gesture runs on the JS thread)
   const prevWheelY = useRef(0);
+  // true while a finger is down on the scroll-wheel thumb
+  const scrollHeldRef = useRef(false);
   // inverted-scroll flag mirrored for worklets (React state is unreadable there)
   const invertedScrollSV = useSharedValue(false);
 
@@ -421,6 +427,17 @@ export default function TouchpadScreen({navigation, route}: Props) {
     touchActiveRef.current = value;
   };
 
+  // Measured touchpad surface size (px). The pad is rarely square, so
+  // vertical deltas are scaled by width/height before sending: a
+  // full-height swipe then moves the cursor as far as a full-width swipe.
+  // The factor is capped: in landscape the pad is very wide and short, so
+  // strict width/height equalization would over-amplify vertical jitter.
+  const padSizeRef = useRef({w: 0, h: 0});
+
+  const handleTouchpadLayout = (w: number, h: number) => {
+    padSizeRef.current = {w, h};
+  };
+
   useInterval(
     () => {
       // Never fire the deferred tap-click while the finger is still down:
@@ -437,6 +454,15 @@ export default function TouchpadScreen({navigation, route}: Props) {
         }
       }
 
+      // Aspect compensation so pointer travel is uniform on both axes.
+      // Capped: extreme aspects (wide-short landscape pad) would otherwise
+      // push vertical gain into jitter-amplifying territory.
+      const {w: padW, h: padH} = padSizeRef.current;
+      const normY =
+        padW > 0 && padH > 0
+          ? Math.min(1.5, Math.max(0.5, padW / padH))
+          : 1;
+
       if (isDraggingRef.current) {
         pendingLeftClick.current = false;
         const dx = accX.value;
@@ -445,7 +471,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
           sendPinnedMessage({
             type: 'windowdragupdate',
             x: dx * tS.current,
-            y: dy * tS.current,
+            y: dy * tS.current * normY,
           });
           accX.value = 0;
           accY.value = 0;
@@ -455,10 +481,22 @@ export default function TouchpadScreen({navigation, route}: Props) {
         sendPinnedMessage({
           type: 'coordinates',
           x: accX.value * tS.current,
-          y: accY.value * tS.current,
+          y: accY.value * tS.current * normY,
         });
         accX.value = 0;
         accY.value = 0;
+      }
+
+      // Held-displaced wheel thumb auto-repeat: pulling the thumb aside
+      // and holding it keeps emitting small scrolls in that direction
+      // every send tick until release.
+      if (scrollHeldRef.current) {
+        const held = translationY.value;
+        if (Math.abs(held) >= SCROLL_REPEAT_DEADZONE) {
+          const dir = settingsData?.invertedScroll ? 1 : -1;
+          accSY.value +=
+            (dir * held * SCROLL_REPEAT_PER_TICK) / MAX_TRANSLATE_Y;
+        }
       }
 
       if (accSX.value !== 0 || accSY.value !== 0) {
@@ -668,6 +706,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
     .minDistance(1)
     .onStart(() => {
       prevWheelY.current = 0;
+      scrollHeldRef.current = true;
     })
     .onUpdate(event => {
       translationY.value = clamp(
@@ -683,6 +722,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
     })
     .onEnd(() => {
       prevWheelY.current = 0;
+      scrollHeldRef.current = false;
       translationY.value = withTiming(0, {
         duration: 100,
       });
@@ -864,6 +904,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
             sendLeftClick={sendLeftClick}
             sendRightClick={sendRightClick}
             onShowControls={hideTopControlsAfterDelay}
+            onTouchpadLayout={handleTouchpadLayout}
           />
         ) : (
           <TouchpadView
@@ -872,6 +913,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
             scrollWheelStyles={scrollWheelStyles}
             sendLeftClick={sendLeftClick}
             sendRightClick={sendRightClick}
+            onTouchpadLayout={handleTouchpadLayout}
           />
         ))}
     </>

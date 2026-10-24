@@ -1,8 +1,6 @@
 import {
   SETTINGS_INVERTED_SCROLL_KEY,
   SETTINGS_KEEP_AWAKE_KEY,
-  SETTINGS_ONBOARDING_SHOW_EVERYTIME,
-  SETTINGS_ONBOARDING_SHOW_FIRST_TIME,
   SETTINGS_TOUCHPAD_RESPONSE_RATE,
   DEFAULT_TOUCHPAD_RESPONSE_RATE,
 } from '../constants/settings';
@@ -21,14 +19,6 @@ export function initializeDefaultSettings(): void {
   if (typeof keepAwakeSettings !== 'boolean') {
     setBooleanValueFor(SETTINGS_KEEP_AWAKE_KEY, true);
   }
-  const onboardingEveryTimeSettings = getShowOnBoardingSettingsEverytime();
-  if (typeof onboardingEveryTimeSettings !== 'boolean') {
-    setBooleanValueFor(SETTINGS_ONBOARDING_SHOW_EVERYTIME, false);
-  }
-  const onboardingFirstTimeSettings = getShowOnBoardingSettingsFirstTime();
-  if (typeof onboardingFirstTimeSettings !== 'boolean') {
-    setBooleanValueFor(SETTINGS_ONBOARDING_SHOW_FIRST_TIME, true);
-  }
 }
 
 export function getInvertedScrollSettings(): boolean | undefined {
@@ -45,12 +35,4 @@ export function getResponseRateSettings(): number {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : DEFAULT_TOUCHPAD_RESPONSE_RATE;
-}
-
-export function getShowOnBoardingSettingsEverytime(): boolean | undefined {
-  return getBooleanValueFor(SETTINGS_ONBOARDING_SHOW_EVERYTIME);
-}
-
-export function getShowOnBoardingSettingsFirstTime(): boolean | undefined {
-  return getBooleanValueFor(SETTINGS_ONBOARDING_SHOW_FIRST_TIME);
 }

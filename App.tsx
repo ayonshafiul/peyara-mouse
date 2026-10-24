@@ -5,11 +5,7 @@ import {KeyboardProvider} from 'react-native-keyboard-controller';
 import RootNavigator from './src/navigation/RootNavigator';
 import type {RootStackParamList} from './src/navigation/RootNavigator';
 import {BottomSheetModalProvider} from '@gorhom/bottom-sheet';
-import {
-  getShowOnBoardingSettingsEverytime,
-  getShowOnBoardingSettingsFirstTime,
-  initializeDefaultSettings,
-} from './src/utils/settings';
+import {initializeDefaultSettings} from './src/utils/settings';
 import {ActivityIndicator} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import BootSplash from 'react-native-bootsplash';
@@ -34,19 +30,7 @@ export default function App() {
     useState<keyof RootStackParamList | ''>('');
 
   useEffect(() => {
-    const showOnBoardingSettingsFirstTime =
-      getShowOnBoardingSettingsFirstTime();
-    const showOnBoardingSettingsEveryTime =
-      getShowOnBoardingSettingsEverytime();
-    if (
-      showOnBoardingSettingsEveryTime ||
-      showOnBoardingSettingsFirstTime ||
-      showOnBoardingSettingsFirstTime === undefined // handles the case when it is uninitialized
-    ) {
-      setInitialRoute('Onboarding');
-    } else {
-      setInitialRoute('Tabs');
-    }
+    setInitialRoute('Tabs');
     BootSplash.hide({fade: true});
   }, []);
 

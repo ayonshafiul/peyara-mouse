@@ -17,6 +17,7 @@ interface TouchpadViewProps {
   scrollWheelStyles: AnimatedStyle<ViewStyle>;
   sendLeftClick: () => void;
   sendRightClick: () => void;
+  onTouchpadLayout?: (width: number, height: number) => void;
 }
 
 export default function TouchpadView({
@@ -25,12 +26,20 @@ export default function TouchpadView({
   scrollWheelStyles,
   sendLeftClick,
   sendRightClick,
+  onTouchpadLayout,
 }: TouchpadViewProps) {
   return (
     <>
       <Animated.View style={styles.touchpadContainer}>
         <GestureDetector gesture={composed}>
-          <Animated.View style={styles.touchpad}>
+          <Animated.View
+            style={styles.touchpad}
+            onLayout={e =>
+              onTouchpadLayout?.(
+                e.nativeEvent.layout.width,
+                e.nativeEvent.layout.height,
+              )
+            }>
             <KeepAwakeText />
           </Animated.View>
         </GestureDetector>

@@ -29,11 +29,6 @@ export const SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY = 'scrollsensitivity';
 
 export const SETTINGS_TOUCHPAD_RESPONSE_RATE = 'responserate';
 
-export const SETTINGS_ONBOARDING_SHOW_EVERYTIME =
-  'settingsonboardingshoweverytime';
-
-export const SETTINGS_ONBOARDING_SHOW_FIRST_TIME = 'settingsonboardingonetime';
-
 export const settingsData = [
   {
     label: 'Inverted scroll',
@@ -42,10 +37,6 @@ export const settingsData = [
   {
     label: 'Keep screen awake while connected',
     key: SETTINGS_KEEP_AWAKE_KEY,
-  },
-  {
-    label: 'Always show onboarding screen',
-    key: SETTINGS_ONBOARDING_SHOW_EVERYTIME,
   },
 ];
 

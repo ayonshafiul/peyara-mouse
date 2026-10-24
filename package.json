@@ -82,7 +82,7 @@
   "engines": {
     "node": ">= 22.11.0"
   },
-  "description": "Peyara Remote Mouse - turn your phone into a wireless mouse and keyboard for Windows/Linux/Mac.",
+  "description": "Peyara Remote Mouse - turn your phone into a wireless mouse, keyboard and free Stream Deck for Windows/Linux/Mac.",
   "main": "index.js",
   "keywords": [],
   "author": "",
