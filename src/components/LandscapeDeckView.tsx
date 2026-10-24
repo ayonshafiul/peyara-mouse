@@ -1,11 +1,13 @@
-import {StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
-import React, {useEffect} from 'react';
+import {StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import React from 'react';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Animated, {type AnimatedRef} from 'react-native-reanimated';
 import Sortable from 'react-native-sortables';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../constants/colors';
-import {useGlobalStore} from '../store/useGlobalStore';
+import ColumnsStepper from './ColumnsStepper';
+import DeckSelectionBar from './DeckSelectionBar';
+import DeckSelectionGrid from './DeckSelectionGrid';
 import type {DeckAction} from '../types/deck';
 
 interface LandscapeDeckViewProps {
@@ -21,10 +23,30 @@ interface LandscapeDeckViewProps {
   onDragEnd: (params: {data: Array<DeckAction>}) => void;
   onSelectApp: () => void;
   onRefresh: () => void;
-  onDebug: () => void;
   onPortrait: () => void;
-  keepAwake: boolean;
-  onToggleKeepAwake: (value: boolean) => void;
+  onClose: () => void;
+  query: string;
+  onQueryChange: (q: string) => void;
+  isFiltering: boolean;
+  isManual: boolean;
+  columns: number;
+  onDecreaseColumns: () => void;
+  onIncreaseColumns: () => void;
+  selecting: boolean;
+  selectionActions: DeckAction[];
+  selectedIds: string[];
+  onToggleSelect: (id: string) => void;
+  selectionSelected: number;
+  selectionTotal: number;
+  selectionAllSelected: boolean;
+  onToggleSelectAll: () => void;
+  onSaveSelection: () => void;
+  onCancelSelection: () => void;
+  onImport: () => void;
+  canImport: boolean;
+  hasSlug: boolean;
+  showTopControls: boolean;
+  onToggleTopControls: () => void;
 }
 
 export default function LandscapeDeckView({
@@ -40,18 +62,36 @@ export default function LandscapeDeckView({
   onDragEnd,
   onSelectApp,
   onRefresh,
-  onDebug,
   onPortrait,
-  keepAwake,
-  onToggleKeepAwake,
+  onClose,
+  query,
+  onQueryChange,
+  isFiltering,
+  isManual,
+  columns,
+  onDecreaseColumns,
+  onIncreaseColumns,
+  selecting,
+  selectionActions,
+  selectedIds,
+  onToggleSelect,
+  selectionSelected,
+  selectionTotal,
+  selectionAllSelected,
+  onToggleSelectAll,
+  onSaveSelection,
+  onCancelSelection,
+  onImport,
+  canImport,
+  hasSlug,
+  showTopControls,
+  onToggleTopControls,
 }: LandscapeDeckViewProps) {
-  const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    setShowBottomBar(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const showSearch =
+    !loading &&
+    (selecting ? selectionTotal > 0 : actions.length > 0 || isFiltering);
 
   return (
     <View
@@ -64,84 +104,201 @@ export default function LandscapeDeckView({
           paddingBottom: Math.max(insets.bottom, 8),
         },
       ]}>
-      <View style={styles.awakeRow}>
-        <MaterialIcons
-          name="bedtime"
-          size={14}
-          color={colors.WHITE}
-          style={styles.awakeIcon}
-        />
-        <Text style={styles.awakeText} numberOfLines={1}>
-          {keepAwake
-            ? 'Screen will not turn off while keep awake is on'
-            : 'Keep screen awake'}
-        </Text>
-        <Switch
-          value={keepAwake}
-          onValueChange={onToggleKeepAwake}
-          trackColor={{true: colors.PRIM_ACCENT, false: '#555'}}
-          thumbColor={colors.WHITE}
-          accessibilityLabel="Toggle keep awake"
-        />
-      </View>
-      <View style={styles.header}>
+      {showTopControls ? (
+        <>
+          <View style={styles.header}>
+            <View style={styles.topRow}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={onToggleTopControls}
+                activeOpacity={0.8}
+                accessibilityLabel="Hide deck controls">
+                <MaterialIcons
+                  name="settings"
+                  size={20}
+                  color={colors.WHITE}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={onClose}
+                activeOpacity={0.8}
+                accessibilityLabel="Close deck">
+                <MaterialIcons name="close" size={20} color={colors.WHITE} />
+              </TouchableOpacity>
+          <View style={styles.topRowSpacer} />
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={onSelectApp}
+            activeOpacity={0.8}
+            accessibilityLabel="Select app deck">
+            <MaterialIcons name="apps" size={20} color={colors.WHITE} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={onRefresh}
+            activeOpacity={0.8}
+            accessibilityLabel="Refresh deck">
+            <MaterialIcons name="refresh" size={20} color={colors.PRIM_BG} />
+          </TouchableOpacity>
+          <ColumnsStepper
+            value={columns}
+            onDecrease={onDecreaseColumns}
+            onIncrease={onIncreaseColumns}
+          />
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={onPortrait}
+            activeOpacity={0.8}
+            accessibilityLabel="Back to portrait">
+            <MaterialIcons
+              name="stay-primary-portrait"
+              size={20}
+              color={colors.WHITE}
+            />
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {headerLabel}
-          </Text>
-          {!!headerSub && (
+          <View style={styles.titleRow}>
+            <TouchableOpacity
+              style={[styles.importBtn, !canImport && styles.importBtnDisabled]}
+              onPress={onImport}
+              disabled={!canImport}
+              activeOpacity={0.8}
+              accessibilityLabel="Import actions"
+              accessibilityState={{disabled: !canImport}}>
+              <MaterialIcons name="download" size={18} color={colors.WHITE} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {headerLabel}
+            </Text>
+            {isManual && (
+              <View style={styles.manualChip}>
+                <Text style={styles.manualChipText}>Manual selection</Text>
+              </View>
+            )}
+            {showSearch && (
+              <View style={styles.searchInline}>
+                <MaterialIcons
+                  name="search"
+                  size={18}
+                  color="rgba(255,255,255,0.5)"
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search actions…"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  value={query}
+                  onChangeText={onQueryChange}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  accessibilityLabel="Search deck actions"
+                />
+                {!!query && (
+                  <TouchableOpacity
+                    onPress={() => onQueryChange('')}
+                    hitSlop={8}
+                    accessibilityLabel="Clear deck search">
+                    <MaterialIcons
+                      name="close"
+                      size={16}
+                      color={colors.WHITE}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+          {!isManual && !!headerSub && (
             <Text style={styles.headerSub} numberOfLines={1}>
               {headerSub}
             </Text>
           )}
         </View>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onSelectApp}
-          activeOpacity={0.8}
-          accessibilityLabel="Select app deck">
-          <MaterialIcons name="apps" size={20} color={colors.WHITE} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={onRefresh}
-          activeOpacity={0.8}
-          accessibilityLabel="Refresh deck">
-          <MaterialIcons name="refresh" size={20} color={colors.PRIM_BG} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onDebug}
-          activeOpacity={0.8}
-          accessibilityLabel="Open deck debug log">
-          <MaterialIcons name="bug-report" size={20} color={colors.WHITE} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onPortrait}
-          activeOpacity={0.8}
-          accessibilityLabel="Back to portrait">
-          <MaterialIcons
-            name="stay-primary-portrait"
-            size={20}
-            color={colors.WHITE}
-          />
-        </TouchableOpacity>
       </View>
+        </>
+      ) : (
+        <View style={styles.hiddenBar}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={onToggleTopControls}
+            activeOpacity={0.8}
+            accessibilityLabel="Show deck controls">
+            <MaterialIcons
+              name="settings"
+              size={20}
+              color={colors.WHITE}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+      {selecting && (
+        <DeckSelectionBar
+          selected={selectionSelected}
+          total={selectionTotal}
+          allSelected={selectionAllSelected}
+          onToggleAll={onToggleSelectAll}
+          onSave={onSaveSelection}
+          onCancel={onCancelSelection}
+        />
+      )}
 
       {loading ? (
         <View style={styles.center}>
           <Text style={styles.text}>Loading actions…</Text>
         </View>
+      ) : selecting ? (
+        selectionActions.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={[styles.text, styles.helperText]}>{emptyText}</Text>
+          </View>
+        ) : (
+          <Animated.ScrollView
+            ref={scrollableRef}
+            bounces={false}
+            contentContainerStyle={styles.gridContent}>
+            <DeckSelectionGrid
+              actions={selectionActions}
+              columns={columns}
+              selectedIds={selectedIds}
+              onToggle={onToggleSelect}
+            />
+          </Animated.ScrollView>
+        )
+      ) : actions.length === 0 && !isFiltering ? (
+        <View style={styles.center}>
+          <Text style={[styles.text, styles.helperText]}>{emptyText}</Text>
+          {hasSlug && (
+            <View style={styles.selectedAppCard}>
+              <Text style={styles.selectedAppCaption}>Selected app</Text>
+              <Text style={styles.selectedAppName} numberOfLines={1}>
+                {headerLabel}
+              </Text>
+            </View>
+          )}
+          {canImport && (
+            <TouchableOpacity
+              style={styles.pickCta}
+              onPress={onImport}
+              activeOpacity={0.8}
+              accessibilityLabel="Import actions">
+              <Text style={styles.pickCtaText}>Import actions</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.pickCta, styles.secondaryCta]}
+            onPress={onSelectApp}
+            activeOpacity={0.8}
+            accessibilityLabel={hasSlug ? 'Change app selection' : 'Select app'}>
+            <Text style={[styles.pickCtaText, styles.secondaryCtaText]}>
+              {hasSlug ? 'Change app selection' : 'Select app'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : actions.length === 0 ? (
         <View style={styles.center}>
           <Text style={[styles.text, styles.helperText]}>{emptyText}</Text>
-          <TouchableOpacity
-            style={styles.pickCta}
-            onPress={onSelectApp}
-            activeOpacity={0.8}>
-            <Text style={styles.pickCtaText}>Select app</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <Animated.ScrollView
@@ -149,7 +306,7 @@ export default function LandscapeDeckView({
           bounces={false}
           contentContainerStyle={styles.gridContent}>
           <Sortable.Grid
-            columns={5}
+            columns={columns}
             columnGap={10}
             rowGap={10}
             data={actions}
@@ -171,38 +328,63 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   header: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  topRowSpacer: {
+    flex: 1,
+  },
+  hiddenBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  awakeRow: {
+  headerText: {
+    paddingTop: 2,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
   },
-  awakeIcon: {
-    opacity: 0.7,
+  importBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.TOUCHPAD,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  awakeText: {
-    flex: 1,
-    color: colors.WHITE,
-    opacity: 0.7,
-    fontSize: 11,
-    fontFamily: 'Raleway-Regular',
-  },  headerText: {
-    flex: 1,
+  importBtnDisabled: {
+    opacity: 0.4,
   },
   headerTitle: {
+    flex: 1,
     color: colors.WHITE,
-    fontSize: 16,
+    fontSize: 13,
+    fontFamily: 'Raleway-Bold',
+  },
+  manualChip: {
+    borderWidth: 1,
+    borderColor: colors.PRIM_ACCENT,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  manualChipText: {
+    color: colors.PRIM_ACCENT,
+    fontSize: 11,
     fontFamily: 'Raleway-Bold',
   },
   headerSub: {
     color: colors.WHITE,
     opacity: 0.7,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
     fontFamily: 'Raleway-Regular',
   },
@@ -221,6 +403,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.TOUCHPAD,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchInline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.TOUCHPAD,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 34,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.WHITE,
+    fontSize: 13,
+    fontFamily: 'Raleway-Regular',
+    paddingVertical: 0,
   },
   gridContent: {
     paddingTop: 4,
@@ -255,5 +454,36 @@ const styles = StyleSheet.create({
     color: colors.PRIM_BG,
     fontSize: 14,
     fontFamily: 'Raleway-Bold',
+  },
+  secondaryCta: {
+    marginTop: 12,
+    backgroundColor: colors.TOUCHPAD,
+  },
+  secondaryCtaText: {
+    color: colors.WHITE,
+  },
+  selectedAppCard: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderWidth: 2,
+    borderColor: colors.PRIM_ACCENT,
+    borderRadius: 12,
+    alignItems: 'center',
+    maxWidth: '100%',
+  },
+  selectedAppCaption: {
+    color: colors.PRIM_ACCENT,
+    fontSize: 10,
+    fontFamily: 'Raleway-Regular',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  selectedAppName: {
+    color: colors.WHITE,
+    fontSize: 16,
+    fontFamily: 'Raleway-Bold',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

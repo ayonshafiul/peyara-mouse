@@ -7,6 +7,7 @@ export const DECK_REPO_BASE =
 const APPS_CACHE_KEY = 'deck:cache:apps.json';
 const DECK_CACHE_PREFIX = 'deck:cache:deck:';
 const ORDER_PREFIX = 'deck:order:';
+const SELECTION_PREFIX = 'deck:selection:';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface CacheEnvelope<T> {
@@ -41,6 +42,60 @@ export function matchSlug(appName: string, apps: AppsJson | null): string {
 
 export function orderKeyForSlug(slug: string): string {
   return `${ORDER_PREFIX}${slug}`;
+}
+
+export function selectionKeyForSlug(slug: string): string {
+  return `${SELECTION_PREFIX}${slug}`;
+}
+
+function isValidDeckAction(value: unknown): value is DeckAction {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === 'string' &&
+    typeof v.label === 'string' &&
+    typeof v.key === 'string'
+  );
+}
+
+/**
+ * Load the user's persisted action selection for a slug.
+ * Returns null when nothing was ever imported/selected for the slug.
+ */
+export function loadSelectedActions(slug: string): DeckAction[] | null {
+  if (!slug) {
+    return null;
+  }
+  try {
+    const raw = getValueFor(selectionKeyForSlug(slug));
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed.filter(isValidDeckAction);
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the user's selected actions (full objects, in order) for a slug. */
+export function saveSelectedActions(
+  slug: string,
+  actions: DeckAction[],
+): void {
+  if (!slug) {
+    return;
+  }
+  try {
+    setValueFor(selectionKeyForSlug(slug), JSON.stringify(actions));
+  } catch {
+    // best-effort persist
+  }
 }
 
 function readCache<T>(key: string): T | null {
@@ -224,7 +279,8 @@ export function clearDeckCachesForTests(): void {
       if (
         key === APPS_CACHE_KEY ||
         key.startsWith(DECK_CACHE_PREFIX) ||
-        key.startsWith(ORDER_PREFIX)
+        key.startsWith(ORDER_PREFIX) ||
+        key.startsWith(SELECTION_PREFIX)
       ) {
         storage.remove(key);
       }

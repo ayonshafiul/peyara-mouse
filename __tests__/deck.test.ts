@@ -18,7 +18,10 @@ jest.mock('react-native-mmkv', () => {
 import {
   applyOrderMap,
   buildActionMessage,
+  loadSelectedActions,
   matchSlug,
+  saveSelectedActions,
+  selectionKeyForSlug,
   slugify,
 } from '../src/utils/deck';
 import type {AppsJson} from '../src/types/deck';
@@ -67,6 +70,31 @@ describe('deck utils', () => {
     expect(ordered.map(x => x.id)).toEqual(['a', 'new']);
   });
 
+  test('selection round-trips full action objects in order', () => {
+    const actions = [
+      {id: 'b', label: 'B', key: 'b'},
+      {id: 'a', label: 'A', key: 'a', modifiers: ['ctrl']},
+    ];
+    saveSelectedActions('sel-roundtrip', actions);
+    expect(loadSelectedActions('sel-roundtrip')).toEqual(actions);
+  });
+
+  test('loadSelectedActions returns null when absent and filters invalid entries', () => {
+    expect(loadSelectedActions('sel-absent')).toBeNull();
+    const {setValueFor} = require('../src/utils/storage');
+    setValueFor(
+      selectionKeyForSlug('sel-invalid'),
+      JSON.stringify([
+        {id: 'ok', label: 'Ok', key: 'o'},
+        {id: 'bad-no-key', label: 'Bad'},
+        null,
+        'nope',
+      ]),
+    );
+    expect(loadSelectedActions('sel-invalid')).toEqual([
+      {id: 'ok', label: 'Ok', key: 'o'},
+    ]);
+  });
   test('buildActionMessage defaults modifiers/timing', () => {
     expect(buildActionMessage({id: 'x', label: 'X', key: 't'})).toEqual({
       type: 'action',

@@ -3,12 +3,10 @@ import React from 'react';
 import colors from '../constants/colors';
 import HomeIcon from '../../assets/icons/HomeIcon';
 import ControlsIcon from '../../assets/icons/ControlsIcon';
-import DeckIcon from '../../assets/icons/DeckIcon';
 import SettingsIcon from '../../assets/icons/SettingsIcon';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import HomeScreen from '../screens/HomeScreen';
-import DeckScreen from '../screens/DeckScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TouchpadNavigator, {
   type TouchpadStackParamList,
@@ -19,7 +17,6 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 export type TabParamList = {
   Home: undefined;
   Touchpad: NavigatorScreenParams<TouchpadStackParamList>;
-  Deck: undefined;
   Settings: undefined;
 };
 
@@ -70,18 +67,6 @@ export default function TabsNavigator() {
           ),
         }}
         component={TouchpadNavigator}
-      />
-      <Tabs.Screen
-        name="Deck"
-        options={{
-          title: '',
-          tabBarIcon: ({color}) => (
-            <View style={styles.iconContainer}>
-              <DeckIcon color={color} />
-            </View>
-          ),
-        }}
-        component={DeckScreen}
       />
       <Tabs.Screen
         name="Settings"

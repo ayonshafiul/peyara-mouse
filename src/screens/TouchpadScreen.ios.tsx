@@ -53,6 +53,7 @@ import useInterval from '../hooks/useInterval';
 import {getValueFor, setValueFor} from '../utils/storage';
 import KeyboardModal from '../modals/KeyboardModal';
 import ClipboardModal from '../modals/ClipboardModal';
+import DeckModal from '../modals/DeckModal';
 import type {BottomSheetModal as BottomSheetModalType} from '@gorhom/bottom-sheet';
 import RoundKey from '../components/RoundKey';
 import {useIsFocused} from '@react-navigation/native';
@@ -131,6 +132,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
   );
   const [receivedText, setReceivedText] = useState('');
   const [clipboardVisible, setClipboardVisible] = useState(false);
+  const [deckVisible, setDeckVisible] = useState(false);
   const [showLandscape, setShowLandscape] = useState(false);
   const [showTopControls, setShowTopControls] = useState(true);
   const [tune, setTune] = useState<TuneValues>(loadTuneValues);
@@ -795,6 +797,15 @@ export default function TouchpadScreen({navigation, route}: Props) {
               </RoundKey>
               <RoundKey
                 containerStyle={styles.roundKey}
+                onPress={() => setDeckVisible(true)}>
+                <MaterialIcons
+                  name="dashboard"
+                  size={24}
+                  color={colors.WHITE}
+                />
+              </RoundKey>
+              <RoundKey
+                containerStyle={styles.roundKey}
                 onPress={showLandscape ? setPortraitMode : setLandscapeMode}>
                 <MaterialIcons
                   name={
@@ -913,6 +924,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       )}
       {keyboardModal}
       {clipboardModal}
+      <DeckModal visible={deckVisible} onClose={() => setDeckVisible(false)} />
     </>
   );
 }
