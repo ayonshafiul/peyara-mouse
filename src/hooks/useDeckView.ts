@@ -166,6 +166,7 @@ export function useDeckView(): DeckViewController {
         pid: typeof msg.pid === 'number' ? msg.pid : 0,
         os: typeof msg.os === 'string' ? msg.os : '',
       };
+      const prevApp = activeAppRef.current;
       activeAppRef.current = info;
       setActiveApp(info);
       if (manualSlugRef.current) {
@@ -177,6 +178,17 @@ export function useDeckView(): DeckViewController {
         return;
       }
       const slug = matchSlug(info.app, apps ?? appsJsonRef.current);
+      // Same app as the last frame: the stored deck is already showing, so
+      // skip re-resolving — otherwise every auto-sync poll would fully
+      // refresh (and re-render) the grid.
+      if (prevApp && prevApp.app === info.app && slugRef.current === slug) {
+        addDebugLog(
+          'INFO',
+          'auto unchanged',
+          `app=${JSON.stringify(info.app)} slug=${JSON.stringify(slug)} — skipping deck resolve`,
+        );
+        return;
+      }
       addDebugLog(
         'INFO',
         'resolve deck',
