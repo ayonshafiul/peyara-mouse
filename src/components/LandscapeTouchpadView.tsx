@@ -1,6 +1,5 @@
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import React, {useEffect} from 'react';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Animated, {type AnimatedStyle} from 'react-native-reanimated';
 import {
   GestureDetector,
@@ -10,8 +9,6 @@ import {
 import type {ViewStyle} from 'react-native';
 import colors from '../constants/colors';
 import {useGlobalStore} from '../store/useGlobalStore';
-import RoundKey from './RoundKey';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 type DetectorGesture = LegacyComposedGesture | GestureType;
 
@@ -21,7 +18,6 @@ interface LandscapeTouchpadViewProps {
   scrollWheelStyles: AnimatedStyle<ViewStyle>;
   sendLeftClick: () => void;
   sendRightClick: () => void;
-  onShowControls: () => void;
   onTouchpadLayout?: (width: number, height: number) => void;
 }
 
@@ -31,11 +27,9 @@ export default function LandscapeTouchpadView({
   scrollWheelStyles,
   sendLeftClick,
   sendRightClick,
-  onShowControls,
   onTouchpadLayout,
 }: LandscapeTouchpadViewProps) {
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     setShowBottomBar(false);
@@ -43,15 +37,7 @@ export default function LandscapeTouchpadView({
   }, []);
 
   return (
-    <View
-      style={[
-        styles.landscapeRoot,
-        {
-          paddingLeft: Math.max(insets.left, 8),
-          paddingRight: Math.max(insets.right, 8),
-          paddingBottom: Math.max(insets.bottom, 8),
-        },
-      ]}>
+    <View style={styles.landscapeRoot}>
       <View style={styles.row}>
         {/* Mouse Buttons */}
         <View style={styles.clicksColumn}>
@@ -63,7 +49,6 @@ export default function LandscapeTouchpadView({
           </TouchableOpacity>
         </View>
 
-        {/* Touchpad with the settings gear in its bottom-right corner */}
         <View style={styles.touchpadWrapper}>
           <GestureDetector gesture={composed}>
             <Animated.View
@@ -76,10 +61,6 @@ export default function LandscapeTouchpadView({
               }
             />
           </GestureDetector>
-          {/* Re-show the top controls (they auto-hide in landscape) */}
-          <RoundKey containerStyle={styles.settings} onPress={onShowControls}>
-            <MaterialIcons name={'settings'} size={24} color={colors.WHITE} />
-          </RoundKey>
         </View>
 
         {/* Scroll Wheel */}
@@ -164,14 +145,5 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: colors.PRIM_BG,
     marginVertical: 2,
-  },
-  settings: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    margin: 0,
-    opacity: 0.6,
-    width: 34,
-    height: 34,
   },
 });

@@ -7,6 +7,7 @@ import Orientation from 'react-native-orientation-locker';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {Gesture} from 'react-native-gesture-handler';
 import {
   runOnJS,
@@ -30,7 +31,6 @@ import {
   getKeepAwakeSettings,
   getResponseRateSettings,
 } from '../utils/settings';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import {
   DEFAULT_TOUCHPAD_RESPONSE_RATE,
   DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
@@ -53,15 +53,16 @@ import useInterval from '../hooks/useInterval';
 import {getValueFor, setValueFor} from '../utils/storage';
 import KeyboardModal from '../modals/KeyboardModal';
 import ClipboardModal from '../modals/ClipboardModal';
-import DeckModal from '../modals/DeckModal';
 import type {BottomSheetModal as BottomSheetModalType} from '@gorhom/bottom-sheet';
-import RoundKey from '../components/RoundKey';
 import {useIsFocused} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {TouchpadStackParamList} from '../navigation/TouchpadNavigator';
-import TouchpadView from '../components/TouchpadView';
-import LandscapeTouchpadView from '../components/LandscapeTouchpadView';
-import QuickTuneRow, {type TuneValues} from '../components/QuickTuneRow';
+import type {TuneValues} from '../components/QuickTuneRow';
+import PortraitContainer from '../components/containers/PortraitContainer';
+import LandscapeContainer from '../components/containers/LandscapeContainer';
+import type {ControlView} from '../components/toolbars/CommonToolbar';
+import {useDeckView} from '../hooks/useDeckView';
+import DeckAppPickerModal from '../modals/DeckAppPickerModal';
 import {useGlobalStore} from '../store/useGlobalStore';
 import notifee, {EventType, type Event} from 'react-native-notify-kit';
 import {
@@ -136,13 +137,14 @@ export default function TouchpadScreen({navigation, route}: Props) {
   );
   const [receivedText, setReceivedText] = useState('');
   const [clipboardVisible, setClipboardVisible] = useState(false);
-  const [deckVisible, setDeckVisible] = useState(false);
+  const [activeView, setActiveView] = useState<ControlView>('touchpad');
   const [showLandscape, setShowLandscape] = useState(false);
   const [showTopControls, setShowTopControls] = useState(true);
   const [tune, setTune] = useState<TuneValues>(loadTuneValues);
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
+  const deck = useDeckView();
 
   const serverUrl = useMemo(
     () => route?.params?.serverUrl ?? getValueFor(SERVER_URL_KEY) ?? null,
@@ -374,6 +376,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
     setValueFor(SERVER_PAIRING_CODE_KEY, '');
     keyboardModalRef?.current?.dismiss();
     setClipboardVisible(false);
+    deck.resetOnDisconnect();
+    setActiveView('touchpad');
     hideConnectedNotification();
     setPortraitMode();
     setStatus('Disconnected');
@@ -400,15 +404,32 @@ export default function TouchpadScreen({navigation, route}: Props) {
     }
     setShowLandscape(false);
     setShowTopControls(true);
+    deck.setColumnsForOrientation(false);
     Orientation.lockToPortrait();
     setShowBottomBar(true);
   };
 
   const setLandscapeMode = () => {
     setShowLandscape(true);
+    deck.setColumnsForOrientation(true);
     Orientation.lockToLandscapeLeft();
     hideTopControlsAfterDelay();
     keyboardModalRef.current?.dismiss();
+  };
+
+  const handleSelectTouchpad = () => {
+    setActiveView('touchpad');
+    if (showLandscape) {
+      hideTopControlsAfterDelay();
+    }
+  };
+
+  const handleSelectDeck = () => {
+    setActiveView('deck');
+    deck.ensureActivated();
+    if (showLandscape) {
+      hideTopControlsAfterDelay();
+    }
   };
 
   const setLastTappedInRef = (time: number) => {
@@ -747,6 +768,16 @@ export default function TouchpadScreen({navigation, route}: Props) {
     setShowTextInput(p => !p);
   };
 
+  // If the OS dismisses the keyboard (swipe-down, back button, focus
+  // change), the hidden input blurs without unmounting — sync the toggle
+  // state so the next press re-opens instead of just unmounting.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      setShowTextInput(false);
+    });
+    return () => sub.remove();
+  }, []);
+
   // autoFocus is unreliable when the input remounts on iOS (toggle
   // off/on), and a focus request made while the keyboard modal is
   // dismissing gets dropped — focus explicitly once the input is mounted
@@ -783,8 +814,6 @@ export default function TouchpadScreen({navigation, route}: Props) {
     setValueFor(SETTINGS_TOUCHPAD_RESPONSE_RATE, String(next.rate));
   };
 
-  const insets = useSafeAreaInsets();
-
   const statusViews = (
     <>
       {loading && <ActivityIndicator size="large" color={colors.PRIM_ACCENT} />}
@@ -803,79 +832,10 @@ export default function TouchpadScreen({navigation, route}: Props) {
     </>
   );
 
-  const topControls = (
-    <>
-      {status === 'Connected' && showTopControls && (
-        <View
-          style={[
-            styles.keysConatiner,
-            showLandscape && {
-              marginTop: insets.top,
-              paddingHorizontal: 16 + Math.max(insets.left, insets.right),
-            },
-          ]}>
-              <RoundKey containerStyle={styles.roundKey} onPress={focusToggle}>
-                <MaterialIcons
-                  name="keyboard-hide"
-                  size={24}
-                  color={colors.WHITE}
-                />
-              </RoundKey>
-              <RoundKey containerStyle={styles.roundKey} onPress={showControls}>
-                <MaterialIcons
-                  name="control-camera"
-                  size={24}
-                  color={colors.WHITE}
-                />
-              </RoundKey>
-              <RoundKey containerStyle={styles.roundKey} onPress={showClipboard}>
-                <MaterialIcons
-                  name="content-paste"
-                  size={24}
-                  color={colors.WHITE}
-                />
-              </RoundKey>
-              <RoundKey
-                containerStyle={styles.roundKey}
-                onPress={() => setDeckVisible(true)}>
-                <MaterialIcons
-                  name="dashboard"
-                  size={24}
-                  color={colors.WHITE}
-                />
-              </RoundKey>
-              <RoundKey
-                containerStyle={styles.roundKey}
-                onPress={showLandscape ? setPortraitMode : setLandscapeMode}>
-                <MaterialIcons
-                  name={
-                    showLandscape
-                      ? 'stay-primary-portrait'
-                      : 'stay-primary-landscape'
-                  }
-                  size={24}
-                  color={colors.WHITE}
-                />
-              </RoundKey>
-              <RoundKey containerStyle={styles.roundKey} onPress={openHelp}>
-                <MaterialIcons name="help" size={24} color={colors.WHITE} />
-              </RoundKey>
-              <RoundKey
-                containerStyle={styles.roundKey}
-                onPress={disconnectSocket}>
-                <MaterialIcons name="close" size={24} color={colors.WHITE} />
-              </RoundKey>
-            </View>
-          )}
-          {status === 'Connected' && showTopControls && (
-            <QuickTuneRow values={tune} onChange={handleTune} />
-          )}
-        </>
-      );
-
   const hiddenInput = (
     <>
-      {/* Hidden Input for Keyboard */}
+      {/* Hidden Input for Keyboard — lives in the container so it stays
+          accessible from both touchpad and deck views. */}
       {showTextInput && status === 'Connected' && (
         <TextInput
           ref={textInputRef}
@@ -893,31 +853,27 @@ export default function TouchpadScreen({navigation, route}: Props) {
     </>
   );
 
-  const touchpadArea = (
-    <>
-      {status === 'Connected' &&
-        (showLandscape ? (
-          <LandscapeTouchpadView
-            composed={composed}
-            scrollGesture={scrollGesture}
-            scrollWheelStyles={scrollWheelStyles}
-            sendLeftClick={sendLeftClick}
-            sendRightClick={sendRightClick}
-            onShowControls={hideTopControlsAfterDelay}
-            onTouchpadLayout={handleTouchpadLayout}
-          />
-        ) : (
-          <TouchpadView
-            composed={composed}
-            scrollGesture={scrollGesture}
-            scrollWheelStyles={scrollWheelStyles}
-            sendLeftClick={sendLeftClick}
-            sendRightClick={sendRightClick}
-            onTouchpadLayout={handleTouchpadLayout}
-          />
-        ))}
-    </>
-  );
+  const controlProps = {
+    activeView,
+    onSelectTouchpad: handleSelectTouchpad,
+    onSelectDeck: handleSelectDeck,
+    onToggleKeyboardInput: focusToggle,
+    onShowKeyboardModal: showControls,
+    onShowClipboard: showClipboard,
+    onToggleOrientation: showLandscape ? setPortraitMode : setLandscapeMode,
+    onOpenHelp: openHelp,
+    onDisconnect: disconnectSocket,
+    tune,
+    onTuneChange: handleTune,
+    composed,
+    scrollGesture,
+    scrollWheelStyles,
+    sendLeftClick,
+    sendRightClick,
+    onTouchpadLayout: handleTouchpadLayout,
+    hiddenInput,
+    deck,
+  };
 
   const keyboardModal = (
     <KeyboardModal
@@ -939,17 +895,21 @@ export default function TouchpadScreen({navigation, route}: Props) {
     />
   );
 
-  // The touchpad, controls and hidden input only render when connected.
-  // Otherwise the (flex: 1) connecting / disconnected views would split
-  // the screen with the touchpad and squeeze it into half the space.
-  const touchpadContent = (
-    <>
-      {topControls}
-      {hiddenInput}
-      {touchpadArea}
-    </>
+  const deckAppPickerModal = (
+    <DeckAppPickerModal
+      visible={deck.pickerVisible}
+      apps={deck.appsJson}
+      selectedSlug={deck.currentSlug}
+      manualSlug={deck.manualSlug}
+      onSelect={deck.handleManualSelect}
+      onSelectAuto={deck.handleSelectAuto}
+      onClose={() => deck.setPickerVisible(false)}
+    />
   );
 
+  // The controls and hidden input only render when connected. Otherwise the
+  // (flex: 1) connecting / disconnected views would split the screen with
+  // the touchpad and squeeze it into half the space.
   // Landscape owns its insets explicitly (cutout + gesture bar) so the pad
   // uses the full screen; portrait relies on SafeAreaView.
   return (
@@ -957,16 +917,28 @@ export default function TouchpadScreen({navigation, route}: Props) {
       <StatusBar hidden />
       {showLandscape ? (
         <View style={styles.container}>
-          {status === 'Connected' ? touchpadContent : statusViews}
+          {status === 'Connected' ? (
+            <LandscapeContainer
+              {...controlProps}
+              showTopControls={showTopControls}
+              onShowControls={hideTopControlsAfterDelay}
+            />
+          ) : (
+            statusViews
+          )}
         </View>
       ) : (
         <SafeAreaView style={styles.container}>
-          {status === 'Connected' ? touchpadContent : statusViews}
+          {status === 'Connected' ? (
+            <PortraitContainer {...controlProps} />
+          ) : (
+            statusViews
+          )}
         </SafeAreaView>
       )}
       {keyboardModal}
       {clipboardModal}
-      <DeckModal visible={deckVisible} onClose={() => setDeckVisible(false)} />
+      {deckAppPickerModal}
     </>
   );
 }
@@ -979,19 +951,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     backgroundColor: colors.PRIM_BG,
     paddingHorizontal: 8,
-  },
-  keysConatiner: {
-    flexDirection: 'row',
-    width: '100%',
-    maxHeight: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 16,
-  },
-  roundKey: {
-    width: 34,
-    height: 34,
   },
   retryWrapper: {
     flex: 1,
