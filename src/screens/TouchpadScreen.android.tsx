@@ -390,6 +390,10 @@ export default function TouchpadScreen({navigation, route}: Props) {
     navigation.navigate('TouchpadHelp');
   };
 
+  const goHome = () => {
+    navigation.getParent()?.navigate('Home' as never);
+  };
+
   const hideTopControlsAfterDelay = () => {
     setShowTopControls(true);
     if (hideControlsTimer.current) {
@@ -839,9 +843,15 @@ export default function TouchpadScreen({navigation, route}: Props) {
             Go to home, select a server and connect again.
           </Text>
 
-          <TouchableOpacity onPress={connectSocket}>
-            <Text style={styles.txtRetry}>Reconnect to this server</Text>
-          </TouchableOpacity>
+          <View style={styles.retryBtnRow}>
+            <TouchableOpacity onPress={connectSocket}>
+              <Text style={styles.txtRetry}>Reconnect to this server</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={goHome}>
+              <Text style={styles.txtRetry}>Go back to Home</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </>
@@ -980,11 +990,17 @@ const styles = StyleSheet.create({
   },
   txtRetry: {
     color: colors.PRIM_BG,
-    marginTop: 16,
     backgroundColor: colors.PRIM_ACCENT,
     borderRadius: 4,
     padding: 8,
     fontFamily: 'Raleway-Regular',
+  },
+  retryBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
   },
   input: {
     height: 40,
