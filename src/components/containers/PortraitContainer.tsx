@@ -97,6 +97,8 @@ export default function PortraitContainer({
           canImport={deck.canImportActions}
           onSelectApp={() => deck.setPickerVisible(true)}
           onRefresh={deck.requestRefresh}
+          autoSync={deck.autoSync}
+          onToggleAutoSync={deck.toggleAutoSync}
         />
       )}
       {hiddenInput}

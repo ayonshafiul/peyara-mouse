@@ -49,6 +49,8 @@ export interface DeckViewController {
   displayEmptyText: string;
   pickerVisible: boolean;
   setPickerVisible: (v: boolean) => void;
+  autoSync: boolean;
+  toggleAutoSync: () => void;
   handleManualSelect: (slug: string) => void;
   handleSelectAuto: () => void;
   requestRefresh: () => void;
@@ -80,6 +82,7 @@ export function useDeckView(): DeckViewController {
   const [currentSlug, setCurrentSlug] = useState('');
   const [selecting, setSelecting] = useState(false);
   const [importedActions, setImportedActions] = useState<DeckAction[]>([]);
+  const [autoSync, setAutoSync] = useState(false);
 
   const activeAppRef = useRef<ActiveAppInfo | null>(null);
   const appsJsonRef = useRef<AppsJson | null>(null);
@@ -188,6 +191,10 @@ export function useDeckView(): DeckViewController {
     (slug: string) => {
       setManualSlug(slug);
       setPickerVisible(false);
+      // A manual pick takes over from auto-sync: stop polling so the deck
+      // stays on the chosen app until the user re-enables auto-sync
+      // (which flips the picker back to Auto).
+      setAutoSync(false);
       addDebugLog('INFO', 'manual select', `slug=${slug}`);
       resolveStoredDeck(slug);
     },
@@ -413,7 +420,40 @@ export function useDeckView(): DeckViewController {
 
   const resetOnDisconnect = useCallback(() => {
     setPickerVisible(false);
+    setAutoSync(false);
   }, []);
+
+  const toggleAutoSync = useCallback(() => {
+    if (autoSync) {
+      setAutoSync(false);
+      return;
+    }
+    setAutoSync(true);
+    // Turning auto-sync on resumes following the desktop focus. If the
+    // user later picks an app manually, that override sticks (auto frames
+    // are ignored) until they cycle auto-sync off and on again.
+    if (manualSlugRef.current) {
+      handleSelectAuto();
+    }
+  }, [autoSync, handleSelectAuto]);
+
+  // Auto-sync: while enabled, poll get-active-app every 2s so switching
+  // apps on the desktop re-routes the deck automatically. Off by default;
+  // also switched off on disconnect to avoid polling a dead connection.
+  useEffect(() => {
+    if (!autoSync) {
+      return;
+    }
+    addDebugLog('INFO', 'auto-sync start', 'polling get-active-app every 2s');
+    sendLogged({type: 'get-active-app'}, 'get-active-app');
+    const timer = setInterval(() => {
+      sendLogged({type: 'get-active-app'}, 'get-active-app');
+    }, 2000);
+    return () => {
+      clearInterval(timer);
+      addDebugLog('INFO', 'auto-sync stop', 'polling stopped');
+    };
+  }, [autoSync, addDebugLog, sendLogged]);
 
   const headerLabel = useMemo(() => {
     if (manualSlug) {
@@ -547,6 +587,8 @@ export function useDeckView(): DeckViewController {
     displayEmptyText,
     pickerVisible,
     setPickerVisible,
+    autoSync,
+    toggleAutoSync,
     handleManualSelect,
     handleSelectAuto,
     requestRefresh,

@@ -26,6 +26,8 @@ interface DeckToolbarProps {
   canImport: boolean;
   onSelectApp: () => void;
   onRefresh: () => void;
+  autoSync: boolean;
+  onToggleAutoSync: () => void;
 }
 
 export default function DeckToolbar({
@@ -49,6 +51,8 @@ export default function DeckToolbar({
   canImport,
   onSelectApp,
   onRefresh,
+  autoSync,
+  onToggleAutoSync,
 }: DeckToolbarProps) {
   return (
     <View style={styles.toolbar}>
@@ -60,18 +64,34 @@ export default function DeckToolbar({
           accessibilityLabel="Select app deck">
           <MaterialIcons name="apps" size={20} color={colors.WHITE} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={onRefresh}
-          activeOpacity={0.8}
-          accessibilityLabel="Refresh deck">
-          <MaterialIcons name="refresh" size={20} color={colors.PRIM_BG} />
-        </TouchableOpacity>
         <ColumnsStepper
           value={columns}
           onDecrease={onDecreaseColumns}
           onIncrease={onIncreaseColumns}
         />
+        <View style={styles.topRowSpacer} />
+        <TouchableOpacity
+          style={styles.refreshBtn}
+          onPress={onRefresh}
+          activeOpacity={0.8}
+          accessibilityLabel="Refresh deck">
+          <MaterialIcons name="refresh" size={16} color={colors.PRIM_BG} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.autoSyncBtn, autoSync && styles.autoSyncBtnOn]}
+          onPress={onToggleAutoSync}
+          activeOpacity={0.8}
+          accessibilityLabel="Toggle deck auto sync"
+          accessibilityRole="switch"
+          accessibilityState={{checked: autoSync}}>
+          <Text
+            style={[
+              styles.autoSyncBtnText,
+              autoSync && styles.autoSyncBtnTextOn,
+            ]}>
+            {autoSync ? 'Auto sync window on' : 'Auto sync window off'}
+          </Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.headerText}>
         <View style={styles.titleRow}>
@@ -150,6 +170,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  topRowSpacer: {
+    flex: 1,
+  },
+  autoSyncBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.TOUCHPAD,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoSyncBtnText: {
+    color: colors.WHITE,
+    opacity: 0.7,
+    fontSize: 11,
+    fontFamily: 'Raleway-Bold',
+  },
+  autoSyncBtnOn: {
+    borderColor: colors.PRIM_ACCENT,
+    backgroundColor: colors.PRIM_ACCENT,
+  },
+  autoSyncBtnTextOn: {
+    color: colors.PRIM_BG,
+    opacity: 1,
+  },
   headerText: {
     paddingTop: 2,
   },
@@ -190,9 +237,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Raleway-Regular',
   },
   refreshBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.PRIM_ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
