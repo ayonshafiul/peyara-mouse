@@ -28,6 +28,7 @@ import {onPinnedMessage, sendPinnedMessage} from '../native/PeyaraSocket';
 import DeckAppPickerModal from './DeckAppPickerModal';
 import DeckSelectionBar from '../components/DeckSelectionBar';
 import DeckSelectionGrid from '../components/DeckSelectionGrid';
+import {useDeckSelectionStore} from '../store/useDeckSelectionStore';
 import type {ActiveAppInfo, AppsJson, DeckAction} from '../types/deck';
 import {
   buildActionMessage,
@@ -60,7 +61,6 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
   const [currentSlug, setCurrentSlug] = useState('');
   const [selecting, setSelecting] = useState(false);
   const [importedActions, setImportedActions] = useState<DeckAction[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTopControls, setShowTopControls] = useState(true);
 
   const activeAppRef = useRef<ActiveAppInfo | null>(null);
@@ -108,7 +108,6 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     selecting,
     query,
     loading,
-    selectedIds,
   ]);
 
   const addDebugLog = useCallback(
@@ -139,7 +138,7 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     // A slug switch discards any in-progress selection.
     setSelecting(false);
     setImportedActions([]);
-    setSelectedIds([]);
+    useDeckSelectionStore.getState().clear();
     if (!slug || slug === 'unknown') {
       setActions([]);
       setDeckMissing(true);
@@ -276,7 +275,7 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     setColumns(3);
     setSelecting(false);
     setImportedActions([]);
-    setSelectedIds([]);
+    useDeckSelectionStore.getState().clear();
     setShowTopControls(true);
     if (showLandscape) {
       setShowLandscape(false);
@@ -341,7 +340,9 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
         (loadSelectedActions(slug) ?? []).map(a => a.id),
       );
       setImportedActions(deck);
-      setSelectedIds(deck.filter(a => storedIds.has(a.id)).map(a => a.id));
+      useDeckSelectionStore
+        .getState()
+        .replaceAll(deck.filter(a => storedIds.has(a.id)).map(a => a.id));
       setDeckMissing(false);
       setSelecting(true);
     } catch (e) {
@@ -366,12 +367,6 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     }
   }, [activeApp, addDebugLog]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    );
-  }, []);
-
   const toggleSelectAll = useCallback(() => {
     const q = queryRef.current.trim().toLowerCase();
     const shown = q
@@ -379,27 +374,24 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
           a.label.toLowerCase().includes(q),
         )
       : importedActionsRef.current;
-    const visibleIds = new Set(shown.map(a => a.id));
-    setSelectedIds(prev => {
-      const allVisibleSelected =
-        shown.length > 0 && shown.every(a => prev.includes(a.id));
-      if (allVisibleSelected) {
-        return prev.filter(id => !visibleIds.has(id));
-      }
-      const next = new Set(prev);
-      for (const id of visibleIds) {
-        next.add(id);
-      }
-      return [...next];
-    });
+    if (shown.length === 0) {
+      return;
+    }
+    const store = useDeckSelectionStore.getState();
+    const allVisibleSelected = shown.every(a => store.selected[a.id]);
+    store.setMany(
+      shown.map(a => a.id),
+      !allVisibleSelected,
+    );
   }, []);
 
   const saveSelection = useCallback(() => {
     const slug = slugRef.current;
-    if (!slug || selectedIds.length === 0) {
+    const ids = Object.keys(useDeckSelectionStore.getState().selected);
+    if (!slug || ids.length === 0) {
       return;
     }
-    const picked = new Set(selectedIds);
+    const picked = new Set(ids);
     const selected = importedActionsRef.current.filter(a =>
       picked.has(a.id),
     );
@@ -412,13 +404,13 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     setActions(selected);
     setSelecting(false);
     setImportedActions([]);
-    setSelectedIds([]);
-  }, [addDebugLog, selectedIds]);
+    useDeckSelectionStore.getState().clear();
+  }, [addDebugLog]);
 
   const cancelSelection = useCallback(() => {
     setSelecting(false);
     setImportedActions([]);
-    setSelectedIds([]);
+    useDeckSelectionStore.getState().clear();
   }, []);
 
   const fireAction = useCallback(
@@ -478,9 +470,9 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
           <Text style={styles.tileLabel} numberOfLines={2}>
             {item.label}
           </Text>
-          {!!item.modifiers?.length && (
+          {!!item.key && (
             <Text style={styles.tileMeta} numberOfLines={1}>
-              {[...item.modifiers, item.key].join('+')}
+              {[...(item.modifiers ?? []), item.key].join('+')}
             </Text>
           )}
         </View>
@@ -560,13 +552,10 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
     );
   }, [importedActions, query]);
 
-  const allVisibleSelected = useMemo(() => {
-    if (importedVisible.length === 0) {
-      return false;
-    }
-    const picked = new Set(selectedIds);
-    return importedVisible.every(a => picked.has(a.id));
-  }, [importedVisible, selectedIds]);
+  const importedVisibleIds = useMemo(
+    () => importedVisible.map(a => a.id),
+    [importedVisible],
+  );
 
   const selectionEmptyText = useMemo(
     () =>
@@ -653,11 +642,8 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
               onIncreaseColumns={increaseColumns}
               selecting={selecting}
               selectionActions={importedVisible}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              selectionSelected={selectedIds.length}
+              selectionVisibleIds={importedVisibleIds}
               selectionTotal={importedActions.length}
-              selectionAllSelected={allVisibleSelected}
               onToggleSelectAll={toggleSelectAll}
               onSaveSelection={saveSelection}
               onCancelSelection={cancelSelection}
@@ -740,11 +726,7 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
                     activeOpacity={0.8}
                     accessibilityLabel="Import actions"
                     accessibilityState={{disabled: !canImportActions}}>
-                    <MaterialIcons
-                      name="download"
-                      size={18}
-                      color={colors.WHITE}
-                    />
+                    <Text style={styles.importBtnText}>Import actions</Text>
                   </TouchableOpacity>
                   <Text style={styles.headerTitle} numberOfLines={1}>
                     {headerLabel}
@@ -787,9 +769,8 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
 
             {selecting && (
               <DeckSelectionBar
-                selected={selectedIds.length}
                 total={importedActions.length}
-                allSelected={allVisibleSelected}
+                visibleIds={importedVisibleIds}
                 onToggleAll={toggleSelectAll}
                 onSave={saveSelection}
                 onCancel={cancelSelection}
@@ -818,8 +799,6 @@ export default function DeckModal({visible, onClose}: DeckModalProps) {
                   <DeckSelectionGrid
                     actions={importedVisible}
                     columns={columns}
-                    selectedIds={selectedIds}
-                    onToggle={toggleSelect}
                   />
                 </Animated.ScrollView>
               )
@@ -940,12 +919,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   importBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.TOUCHPAD,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.PRIM_ACCENT,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  importBtnText: {
+    color: colors.PRIM_ACCENT,
+    fontSize: 11,
+    fontFamily: 'Raleway-Bold',
   },
   importBtnDisabled: {
     opacity: 0.4,
@@ -957,9 +943,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Raleway-Bold',
   },
   manualChip: {
-    borderWidth: 1,
-    borderColor: colors.PRIM_ACCENT,
-    borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },

@@ -1,24 +1,31 @@
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import React from 'react';
+import React, {memo} from 'react';
 import colors from '../constants/colors';
+import {useDeckSelectionStore} from '../store/useDeckSelectionStore';
 
 interface DeckSelectionBarProps {
-  selected: number;
   total: number;
-  allSelected: boolean;
+  visibleIds: string[];
   onToggleAll: () => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
-export default function DeckSelectionBar({
-  selected,
+function DeckSelectionBar({
   total,
-  allSelected,
+  visibleIds,
   onToggleAll,
   onSave,
   onCancel,
 }: DeckSelectionBarProps) {
+  const selected = useDeckSelectionStore(
+    s => Object.keys(s.selected).length,
+  );
+  const allSelected = useDeckSelectionStore(
+    s =>
+      visibleIds.length > 0 && visibleIds.every(id => s.selected[id] === true),
+  );
+
   const canSave = selected > 0;
   return (
     <View style={styles.bar}>
@@ -53,6 +60,8 @@ export default function DeckSelectionBar({
     </View>
   );
 }
+
+export default memo(DeckSelectionBar);
 
 const styles = StyleSheet.create({
   bar: {

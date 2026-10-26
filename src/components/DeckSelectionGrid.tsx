@@ -1,64 +1,65 @@
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import React, {useMemo} from 'react';
+import React, {memo} from 'react';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../constants/colors';
 import type {DeckAction} from '../types/deck';
+import {useDeckSelectionStore} from '../store/useDeckSelectionStore';
 
 interface DeckSelectionGridProps {
   actions: DeckAction[];
   columns: number;
-  selectedIds: string[];
-  onToggle: (id: string) => void;
 }
 
-export default function DeckSelectionGrid({
-  actions,
-  columns,
-  selectedIds,
-  onToggle,
-}: DeckSelectionGridProps) {
-  const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
+const SelectionCell = memo(function SelectionCellInner({
+  item,
+  width,
+}: {
+  item: DeckAction;
+  width: `${number}%`;
+}) {
+  const isSelected = useDeckSelectionStore(s => s.selected[item.id] === true);
+  const toggle = useDeckSelectionStore(s => s.toggle);
+
+  return (
+    <View style={[styles.cell, {width}]}>
+      <TouchableOpacity
+        style={[styles.tile, isSelected && styles.tileSelected]}
+        onPress={() => toggle(item.id)}
+        activeOpacity={0.8}
+        accessibilityLabel={`${isSelected ? 'Deselect' : 'Select'} ${item.label}`}
+        accessibilityState={{selected: isSelected}}>
+        {!!item.icon && <Text style={styles.tileIcon}>{item.icon}</Text>}
+        <Text style={styles.tileLabel} numberOfLines={2}>
+          {item.label}
+        </Text>
+        {!!item.key && (
+          <Text style={styles.tileMeta} numberOfLines={1}>
+            {[...(item.modifiers ?? []), item.key].join('+')}
+          </Text>
+        )}
+        {isSelected && (
+          <View style={styles.check}>
+            <MaterialIcons name="check" size={16} color={colors.PRIM_BG} />
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+function DeckSelectionGrid({actions, columns}: DeckSelectionGridProps) {
   const width = `${100 / columns}%` as `${number}%`;
 
   return (
     <View style={styles.grid}>
-      {actions.map(item => {
-        const isSelected = selected.has(item.id);
-        return (
-          <View key={item.id} style={[styles.cell, {width}]}>
-            <TouchableOpacity
-              style={[styles.tile, isSelected && styles.tileSelected]}
-              onPress={() => onToggle(item.id)}
-              activeOpacity={0.8}
-              accessibilityLabel={`${isSelected ? 'Deselect' : 'Select'} ${item.label}`}
-              accessibilityState={{selected: isSelected}}>
-              {!!item.icon && (
-                <Text style={styles.tileIcon}>{item.icon}</Text>
-              )}
-              <Text style={styles.tileLabel} numberOfLines={2}>
-                {item.label}
-              </Text>
-              {!!item.modifiers?.length && (
-                <Text style={styles.tileMeta} numberOfLines={1}>
-                  {[...item.modifiers, item.key].join('+')}
-                </Text>
-              )}
-              {isSelected && (
-                <View style={styles.check}>
-                  <MaterialIcons
-                    name="check"
-                    size={16}
-                    color={colors.PRIM_BG}
-                  />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        );
-      })}
+      {actions.map(item => (
+        <SelectionCell key={item.id} item={item} width={width} />
+      ))}
     </View>
   );
 }
+
+export default memo(DeckSelectionGrid);
 
 const styles = StyleSheet.create({
   grid: {

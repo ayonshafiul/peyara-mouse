@@ -34,11 +34,8 @@ interface LandscapeDeckViewProps {
   onIncreaseColumns: () => void;
   selecting: boolean;
   selectionActions: DeckAction[];
-  selectedIds: string[];
-  onToggleSelect: (id: string) => void;
-  selectionSelected: number;
+  selectionVisibleIds: string[];
   selectionTotal: number;
-  selectionAllSelected: boolean;
   onToggleSelectAll: () => void;
   onSaveSelection: () => void;
   onCancelSelection: () => void;
@@ -73,11 +70,8 @@ export default function LandscapeDeckView({
   onIncreaseColumns,
   selecting,
   selectionActions,
-  selectedIds,
-  onToggleSelect,
-  selectionSelected,
+  selectionVisibleIds,
   selectionTotal,
-  selectionAllSelected,
   onToggleSelectAll,
   onSaveSelection,
   onCancelSelection,
@@ -167,7 +161,7 @@ export default function LandscapeDeckView({
               activeOpacity={0.8}
               accessibilityLabel="Import actions"
               accessibilityState={{disabled: !canImport}}>
-              <MaterialIcons name="download" size={18} color={colors.WHITE} />
+              <Text style={styles.importBtnText}>Import actions</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
               {headerLabel}
@@ -235,9 +229,8 @@ export default function LandscapeDeckView({
       )}
       {selecting && (
         <DeckSelectionBar
-          selected={selectionSelected}
           total={selectionTotal}
-          allSelected={selectionAllSelected}
+          visibleIds={selectionVisibleIds}
           onToggleAll={onToggleSelectAll}
           onSave={onSaveSelection}
           onCancel={onCancelSelection}
@@ -261,8 +254,6 @@ export default function LandscapeDeckView({
             <DeckSelectionGrid
               actions={selectionActions}
               columns={columns}
-              selectedIds={selectedIds}
-              onToggle={onToggleSelect}
             />
           </Animated.ScrollView>
         )
@@ -353,12 +344,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   importBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.TOUCHPAD,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.PRIM_ACCENT,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  importBtnText: {
+    color: colors.PRIM_ACCENT,
+    fontSize: 11,
+    fontFamily: 'Raleway-Bold',
   },
   importBtnDisabled: {
     opacity: 0.4,
@@ -370,9 +368,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Raleway-Bold',
   },
   manualChip: {
-    borderWidth: 1,
-    borderColor: colors.PRIM_ACCENT,
-    borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
