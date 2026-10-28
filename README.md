@@ -4,13 +4,14 @@
 
 [![Download iOS app from App Store](https://peyara-remote-mouse.vercel.app/img/appstore.png)](https://apps.apple.com/us/app/peyara-remote-mouse/id6743374036)
 
-## Wifi Remote Mouse + free Stream Deck for your Windows/Linux/Mac PCs.
+## Wifi Remote Mouse + free Shortcut Deck for your Windows/Linux/Mac PCs.
 
 <p align="center"><img src="https://peyara-remote-mouse.vercel.app/img/client-logo.png" alt="Logo" width="250"></p>
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/ayonshafiul/peyara-mouse)
 ![GitHub Repo stars](https://img.shields.io/github/stars/ayonshafiul/peyara-mouse)
 ![GitHub Repo forks](https://img.shields.io/github/forks/ayonshafiul/peyara-mouse)
+[![Google Play downloads](https://playbadges.pavi2410.com/badge/downloads?id=io.github.ayonshafiul.peyara)](https://play.google.com/store/apps/details?id=io.github.ayonshafiul.peyara)
 
 ### Features
 
@@ -18,37 +19,26 @@
 - Landscape and portrait touchpad with side scroll wheel
 - Full keyboard, arrow / function keys and text input
 - Media keys and clipboard send/receive
-- Free Stream Deck with hundreds of app presets, auto-following the focused desktop app
+- Free Shortcut Deck with hundreds of app presets, auto-following the focused desktop app
 - Import and curate your own action set per app — search, multi-select, custom columns, drag-to-reorder
 - Adjustable touchpad sensitivity, scroll sensitivity and response rate
 - QR code pairing with saved servers list
 
-<div style="display: flex; flex-wrap: wrap; gap: 8;">
-<img src="https://peyara-remote-mouse.vercel.app/img/home.png" alt="Servers" width="150">
-<img src="https://peyara-remote-mouse.vercel.app/img/scan-qr.png" alt="Scan QR" width="150">
-<img src="https://peyara-remote-mouse.vercel.app/img/touchpad-2.png" alt="Touchpad" width="150">
-<img src="https://peyara-remote-mouse.vercel.app/img/keyboard.png" alt="Keyboard" width="150">
-<img src="https://peyara-remote-mouse.vercel.app/img/touchpad.png" alt="Media & Clipboard" width="150">
-<img src="https://peyara-remote-mouse.vercel.app/img/settings.png" alt="Settings" width="150">
-</div>
+## Free Shortcut Deck for Mobile
 
-## Free Stream Deck for Mobile
-
-Turn your phone into a free Stream Deck for your PC: open the Deck from the touchpad, pick your app (or let it auto-follow the focused desktop app), and tap to fire shortcuts and macros. Ships with hundreds of ready-made presets for popular desktop apps, with per-app action search, custom column layouts, drag-to-reorder, and import-your-own selection — all persisted on device.
+Turn your phone into a free Shortcut Deck for your PC: open the Deck from the touchpad, pick your app (or let it auto-follow the focused desktop app), and tap to fire shortcuts and macros. Ships with hundreds of ready-made presets for popular desktop apps, with per-app action search, custom column layouts, drag-to-reorder, and import-your-own selection — all persisted on device.
 
 ### Missing a preset for your app?
 
 All presets live in the open [peyara-actions](https://github.com/ayonshafiul/peyara-actions) repo. To add your desired app, open a pull request there with a new preset following the existing format.
 
-## Turn your mobile into a wireless mouse, keyboard and Stream Deck combo with Peyara Remote Mouse in 4 easy steps.
+## Turn your mobile into a wireless mouse, keyboard and Shortcut Deck combo with Peyara Remote Mouse in 4 easy steps.
 
 ### Step 1. Download Desktop Server on Windows/Linux/Mac from
 
 https://peyara-remote-mouse.vercel.app/
 
 ### Step 2: Install the desktop server and start it.
-
-![Start Server](https://peyara-remote-mouse.vercel.app/img/server.png)
 
 ### Step 3: Install the app on your phone
 
@@ -57,8 +47,6 @@ https://peyara-remote-mouse.vercel.app/
 [![Download iOS app from App Store](https://peyara-remote-mouse.vercel.app/img/appstore.png)](https://apps.apple.com/us/app/peyara-remote-mouse/id6743374036)
 
 ### Step 4: Scan the QRCode and connect!
-
-<img src="https://peyara-remote-mouse.vercel.app/img/scan-qr.png" alt="Scan QR" width="150">
 
 Connect, then open the Deck from the touchpad to fire shortcuts for the app in focus!
 
