@@ -15,7 +15,7 @@ interface CommonToolbarProps {
   onShowKeyboardModal: () => void;
   onShowClipboard: () => void;
   onToggleOrientation: () => void;
-  onOpenHelp: () => void;
+  onOpenSettings: () => void;
   onDisconnect: () => void;
 }
 
@@ -28,7 +28,7 @@ export default function CommonToolbar({
   onShowKeyboardModal,
   onShowClipboard,
   onToggleOrientation,
-  onOpenHelp,
+  onOpenSettings,
   onDisconnect,
 }: CommonToolbarProps) {
   const iconSize = isLandscape ? 24 : 20;
@@ -90,8 +90,8 @@ export default function CommonToolbar({
       </RoundKey>
       <RoundKey
         containerStyle={[styles.roundKey, !isLandscape && styles.roundKeyPortrait]}
-        onPress={onOpenHelp}>
-        <MaterialIcons name="help" size={iconSize} color={colors.WHITE} />
+        onPress={onOpenSettings}>
+        <MaterialIcons name="settings" size={iconSize} color={colors.WHITE} />
       </RoundKey>
       <RoundKey
         containerStyle={[styles.roundKey, !isLandscape && styles.roundKeyPortrait]}

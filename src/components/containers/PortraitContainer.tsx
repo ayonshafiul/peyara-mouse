@@ -24,7 +24,7 @@ interface PortraitContainerProps {
   onShowKeyboardModal: () => void;
   onShowClipboard: () => void;
   onToggleOrientation: () => void;
-  onOpenHelp: () => void;
+  onOpenSettings: () => void;
   onDisconnect: () => void;
   tune: TuneValues;
   onTuneChange: (values: TuneValues) => void;
@@ -46,7 +46,7 @@ export default function PortraitContainer({
   onShowKeyboardModal,
   onShowClipboard,
   onToggleOrientation,
-  onOpenHelp,
+  onOpenSettings,
   onDisconnect,
   tune,
   onTuneChange,
@@ -70,7 +70,7 @@ export default function PortraitContainer({
         onShowKeyboardModal={onShowKeyboardModal}
         onShowClipboard={onShowClipboard}
         onToggleOrientation={onToggleOrientation}
-        onOpenHelp={onOpenHelp}
+        onOpenSettings={onOpenSettings}
         onDisconnect={onDisconnect}
       />
       {activeView === 'touchpad' ? (

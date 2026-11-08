@@ -7,7 +7,9 @@ import SettingsIcon from '../../assets/icons/SettingsIcon';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import HomeScreen from '../screens/HomeScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import SettingsNavigator, {
+  type SettingsStackParamList,
+} from './SettingsNavigator';
 import TouchpadNavigator, {
   type TouchpadStackParamList,
 } from './TouchpadNavigator';
@@ -17,7 +19,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 export type TabParamList = {
   Home: undefined;
   Touchpad: NavigatorScreenParams<TouchpadStackParamList>;
-  Settings: undefined;
+  Settings: NavigatorScreenParams<SettingsStackParamList> | undefined;
 };
 
 const Tabs = createBottomTabNavigator<TabParamList>();
@@ -78,7 +80,7 @@ export default function TabsNavigator() {
             </View>
           ),
         }}
-        component={SettingsScreen}
+        component={SettingsNavigator}
       />
     </Tabs.Navigator>
   );

@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import colors from '../constants/colors';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import type {TouchpadStackParamList} from '../navigation/TouchpadNavigator';
+import type {SettingsStackParamList} from '../navigation/SettingsNavigator';
 import FingerIcon from '../../assets/svg/finger.svg';
 import CursorIcon from '../../assets/svg/cursor.svg';
 import SingleTapIcon from '../../assets/svg/single-tap.svg';
@@ -484,7 +484,7 @@ const steps = [
   },
 ];
 
-type Props = NativeStackScreenProps<TouchpadStackParamList, 'TouchpadHelp'>;
+type Props = NativeStackScreenProps<SettingsStackParamList, 'SettingsHelp'>;
 
 export default function HelpScreen({navigation}: Props) {
   const flatListRef = useRef<FlatList>(null);
@@ -496,13 +496,9 @@ export default function HelpScreen({navigation}: Props) {
         animated: true,
       });
     } else if (navigation.canGoBack()) {
-      // Return to the existing TouchpadScreen instance so the live socket
-      // connection and its params are left untouched. Re-navigating with
-      // fresh (empty) params risks dropping the connection and blanking
-      // the touchpad, which only renders when status === 'Connected'.
       navigation.goBack();
     } else {
-      navigation.navigate('TouchpadScreen', {});
+      navigation.navigate('SettingsHome');
     }
   };
 

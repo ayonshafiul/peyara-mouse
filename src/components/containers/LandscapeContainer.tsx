@@ -29,7 +29,7 @@ interface LandscapeContainerProps {
   onShowKeyboardModal: () => void;
   onShowClipboard: () => void;
   onToggleOrientation: () => void;
-  onOpenHelp: () => void;
+  onOpenSettings: () => void;
   onDisconnect: () => void;
   tune: TuneValues;
   onTuneChange: (values: TuneValues) => void;
@@ -53,7 +53,7 @@ export default function LandscapeContainer({
   onShowKeyboardModal,
   onShowClipboard,
   onToggleOrientation,
-  onOpenHelp,
+  onOpenSettings,
   onDisconnect,
   tune,
   onTuneChange,
@@ -93,7 +93,7 @@ export default function LandscapeContainer({
               onShowKeyboardModal={onShowKeyboardModal}
               onShowClipboard={onShowClipboard}
               onToggleOrientation={onToggleOrientation}
-              onOpenHelp={onOpenHelp}
+              onOpenSettings={onOpenSettings}
               onDisconnect={onDisconnect}
             />
           </View>

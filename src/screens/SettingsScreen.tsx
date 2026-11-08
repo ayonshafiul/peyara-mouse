@@ -1,6 +1,9 @@
-import {StyleSheet, Switch, Text, View} from 'react-native';
+import {StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import React, {useEffect, useState} from 'react';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type {SettingsStackParamList} from '../navigation/SettingsNavigator';
 import colors from '../constants/colors';
 import {
   getBooleanValueFor,
@@ -78,7 +81,9 @@ const tuneEntries: Array<{
   },
 ];
 
-export default function SettingsScreen() {
+type Props = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
+
+export default function SettingsScreen({navigation}: Props) {
   const [tune, setTune] = useState<TuneValues>({
     touch: DEFAULT_TOUCHPAD_SENSITIVITY,
     scroll: DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
@@ -130,6 +135,15 @@ export default function SettingsScreen() {
         {settingsData.map(item => (
           <SwitchCard key={item.key} item={item} />
         ))}
+        <TouchableOpacity
+          style={styles.switchCardContainer}
+          onPress={() => navigation.navigate('SettingsHelp')}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Help">
+          <Text style={styles.switchCardText}>Help</Text>
+          <MaterialIcons name="chevron-right" size={24} color={colors.WHITE} />
+        </TouchableOpacity>
       </SafeAreaView>
     </Background>
   );

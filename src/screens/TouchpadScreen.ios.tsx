@@ -229,7 +229,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         setSettingsData({
           invertedScroll: invertedScroll,
         });
-        // Reconnect on refocus (e.g. returning from Help/Settings) if the
+        // Reconnect on refocus (e.g. returning from Settings) if the
         // native layer isn't connected. Uses the storage fallback too, so a
         // missing route param can't leave the screen blank with status ''.
         if (serverUrl && fingerprint && pair && !connectedRef.current) {
@@ -388,8 +388,13 @@ export default function TouchpadScreen({navigation, route}: Props) {
     setLoading(false);
   };
 
-  const openHelp = () => {
-    navigation.navigate('TouchpadHelp');
+  // The Settings tab is portrait-only and shows the tab bar, so leave
+  // landscape first — otherwise the hidden tab bar strands the user there.
+  const openSettings = () => {
+    if (showLandscape) {
+      setPortraitMode();
+    }
+    navigation.getParent()?.navigate('Settings' as never);
   };
 
   const goHome = () => {
@@ -862,7 +867,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
     onShowKeyboardModal: showControls,
     onShowClipboard: showClipboard,
     onToggleOrientation: showLandscape ? setPortraitMode : setLandscapeMode,
-    onOpenHelp: openHelp,
+    onOpenSettings: openSettings,
     onDisconnect: disconnectSocket,
     tune,
     onTuneChange: handleTune,
