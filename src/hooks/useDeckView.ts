@@ -44,6 +44,7 @@ export interface DeckViewController {
   isFiltering: boolean;
   hasSlug: boolean;
   canImportActions: boolean;
+  canEdit: boolean;
   showSearch: boolean;
   displayActions: DeckAction[];
   displayEmptyText: string;
@@ -59,6 +60,7 @@ export interface DeckViewController {
   toggleSelectAll: () => void;
   saveSelection: () => void;
   cancelSelection: () => void;
+  toggleEdit: () => void;
   fireAction: (action: DeckAction) => void;
   handleOrderChange: (params: {indexToKey: Array<string>}) => void;
   handleDragEnd: (params: {data: Array<DeckAction>}) => void;
@@ -67,7 +69,11 @@ export interface DeckViewController {
   resetOnDisconnect: () => void;
 }
 
-export function useDeckView(): DeckViewController {
+/**
+ * @param active true while the deck view is on screen and connected; gates
+ * auto-sync polling.
+ */
+export function useDeckView(active: boolean): DeckViewController {
   const scrollableRef = useAnimatedRef<Animated.ScrollView>();
 
   const [activeApp, setActiveApp] = useState<ActiveAppInfo | null>(null);
@@ -82,7 +88,7 @@ export function useDeckView(): DeckViewController {
   const [currentSlug, setCurrentSlug] = useState('');
   const [selecting, setSelecting] = useState(false);
   const [importedActions, setImportedActions] = useState<DeckAction[]>([]);
-  const [autoSync, setAutoSync] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
 
   const activeAppRef = useRef<ActiveAppInfo | null>(null);
   const appsJsonRef = useRef<AppsJson | null>(null);
@@ -133,25 +139,88 @@ export function useDeckView(): DeckViewController {
     [addDebugLog],
   );
 
-  const resolveStoredDeck = useCallback((slug: string) => {
-    slugRef.current = slug;
-    setCurrentSlug(slug);
-    setSelecting(false);
-    setImportedActions([]);
-    useDeckSelectionStore.getState().clear();
-    if (!slug || slug === 'unknown') {
-      setActions([]);
-      setDeckMissing(true);
+  // Fetches the app's full shortcut catalog and saves all of it as the
+  // deck: picking an app never stops at a selection screen. Curating the
+  // deck is opt-in afterwards, via Edit.
+  const importAll = useCallback(
+    async (slug: string) => {
+      const os = activeAppRef.current?.os || 'windows';
+      addDebugLog('INFO', 'import start', `slug=${slug} os=${os}`);
+      setLoading(true);
+      loadingRef.current = true;
+      try {
+        const deck = await fetchDeckActions(slug, os);
+        if (slugRef.current !== slug) {
+          return;
+        }
+        if (!deck || deck.length === 0) {
+          addDebugLog(
+            'INFO',
+            'import empty',
+            `no actions slug=${slug} os=${os}`,
+          );
+          setDeckMissing(true);
+          setActions([]);
+          return;
+        }
+        addDebugLog(
+          'INFO',
+          'import saved',
+          `slug=${slug} os=${os} count=${deck.length}`,
+        );
+        saveSelectedActions(slug, deck);
+        setDeckMissing(false);
+        setActions(deck);
+      } catch (e) {
+        if (slugRef.current !== slug) {
+          return;
+        }
+        plogError(
+          'Deck',
+          `import failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        addDebugLog(
+          'INFO',
+          'import failed',
+          e instanceof Error ? e.message : String(e),
+        );
+        setDeckMissing(true);
+      } finally {
+        if (slugRef.current === slug) {
+          setLoading(false);
+          loadingRef.current = false;
+        }
+      }
+    },
+    [addDebugLog],
+  );
+
+  const resolveStoredDeck = useCallback(
+    (slug: string) => {
+      slugRef.current = slug;
+      setCurrentSlug(slug);
+      setSelecting(false);
+      setImportedActions([]);
+      useDeckSelectionStore.getState().clear();
+      if (!slug || slug === 'unknown') {
+        setActions([]);
+        setDeckMissing(true);
+        setLoading(false);
+        loadingRef.current = false;
+        return;
+      }
+      setDeckMissing(false);
+      const stored = loadSelectedActions(slug);
+      setActions(stored ?? []);
       setLoading(false);
       loadingRef.current = false;
-      return;
-    }
-    setDeckMissing(false);
-    const stored = loadSelectedActions(slug);
-    setActions(stored ?? []);
-    setLoading(false);
-    loadingRef.current = false;
-  }, []);
+      if (stored === null) {
+        // First time this app is picked: import and save its whole deck.
+        importAll(slug);
+      }
+    },
+    [importAll],
+  );
 
   const handleActiveAppFrame = useCallback(
     async (msg: Record<string, unknown>, apps: AppsJson | null) => {
@@ -278,13 +347,24 @@ export function useDeckView(): DeckViewController {
     sendLogged({type: 'get-active-app'}, 'get-active-app');
   }, [addDebugLog, sendLogged]);
 
-  const handleImport = useCallback(async () => {
+  // Empty-state retry: re-import and save the whole catalog.
+  const handleImport = useCallback(() => {
     const slug = slugRef.current;
     if (!slug || slug === 'unknown' || loadingRef.current) {
       return;
     }
-    const os = activeAppRef.current?.os || activeApp?.os || 'windows';
-    addDebugLog('INFO', 'import start', `slug=${slug} os=${os}`);
+    importAll(slug);
+  }, [importAll]);
+
+  // Enters edit (selection) mode: shows the full catalog with the current
+  // deck preselected. A failed fetch leaves the saved deck untouched.
+  const startEditing = useCallback(async () => {
+    const slug = slugRef.current;
+    if (!slug || slug === 'unknown' || loadingRef.current) {
+      return;
+    }
+    const os = activeAppRef.current?.os || 'windows';
+    addDebugLog('INFO', 'edit start', `slug=${slug} os=${os}`);
     setLoading(true);
     loadingRef.current = true;
     try {
@@ -293,28 +373,17 @@ export function useDeckView(): DeckViewController {
         return;
       }
       if (!deck || deck.length === 0) {
-        addDebugLog(
-          'INFO',
-          'import empty',
-          `no actions slug=${slug} os=${os}`,
-        );
-        setDeckMissing(true);
-        setActions([]);
+        addDebugLog('INFO', 'edit unavailable', `no actions slug=${slug}`);
         return;
       }
-      addDebugLog(
-        'INFO',
-        'import loaded',
-        `slug=${slug} os=${os} count=${deck.length}`,
-      );
-      const storedIds = new Set(
-        (loadSelectedActions(slug) ?? []).map(a => a.id),
-      );
-      setImportedActions(deck);
+      // Saved actions the catalog no longer lists stay selectable, so
+      // saving an edit never silently drops them.
+      const catalogIds = new Set(deck.map(a => a.id));
+      const orphaned = actionsRef.current.filter(a => !catalogIds.has(a.id));
+      setImportedActions([...deck, ...orphaned]);
       useDeckSelectionStore
         .getState()
-        .replaceAll(deck.filter(a => storedIds.has(a.id)).map(a => a.id));
-      setDeckMissing(false);
+        .replaceAll(actionsRef.current.map(a => a.id));
       setSelecting(true);
     } catch (e) {
       if (slugRef.current !== slug) {
@@ -322,21 +391,15 @@ export function useDeckView(): DeckViewController {
       }
       plogError(
         'Deck',
-        `import failed: ${e instanceof Error ? e.message : String(e)}`,
+        `edit fetch failed: ${e instanceof Error ? e.message : String(e)}`,
       );
-      addDebugLog(
-        'INFO',
-        'import failed',
-        e instanceof Error ? e.message : String(e),
-      );
-      setDeckMissing(true);
     } finally {
       if (slugRef.current === slug) {
         setLoading(false);
         loadingRef.current = false;
       }
     }
-  }, [activeApp, addDebugLog]);
+  }, [addDebugLog]);
 
   const toggleSelectAll = useCallback(() => {
     const q = queryRef.current.trim().toLowerCase();
@@ -363,9 +426,17 @@ export function useDeckView(): DeckViewController {
       return;
     }
     const picked = new Set(ids);
-    const selected = importedActionsRef.current.filter(a =>
-      picked.has(a.id),
+    const byId = new Map(importedActionsRef.current.map(a => [a.id, a]));
+    // Actions already on the deck keep their custom (dragged) order; newly
+    // picked ones are appended in catalog order.
+    const kept = actionsRef.current
+      .filter(a => picked.has(a.id))
+      .map(a => byId.get(a.id) ?? a);
+    const keptIds = new Set(kept.map(a => a.id));
+    const added = importedActionsRef.current.filter(
+      a => picked.has(a.id) && !keptIds.has(a.id),
     );
+    const selected = [...kept, ...added];
     addDebugLog(
       'INFO',
       'selection saved',
@@ -383,6 +454,15 @@ export function useDeckView(): DeckViewController {
     setImportedActions([]);
     useDeckSelectionStore.getState().clear();
   }, []);
+
+  // The Edit button: enters selection mode, and as "Done" saves it.
+  const toggleEdit = useCallback(() => {
+    if (selectingRef.current) {
+      saveSelection();
+    } else {
+      startEditing();
+    }
+  }, [saveSelection, startEditing]);
 
   const fireAction = useCallback(
     (action: DeckAction) => {
@@ -432,7 +512,6 @@ export function useDeckView(): DeckViewController {
 
   const resetOnDisconnect = useCallback(() => {
     setPickerVisible(false);
-    setAutoSync(false);
   }, []);
 
   const toggleAutoSync = useCallback(() => {
@@ -450,10 +529,11 @@ export function useDeckView(): DeckViewController {
   }, [autoSync, handleSelectAuto]);
 
   // Auto-sync: while enabled, poll get-active-app every 2s so switching
-  // apps on the desktop re-routes the deck automatically. Off by default;
-  // also switched off on disconnect to avoid polling a dead connection.
+  // apps on the desktop re-routes the deck automatically. On by default,
+  // but polls only while the deck is on screen and connected — never from
+  // the touchpad view or over a dead connection.
   useEffect(() => {
-    if (!autoSync) {
+    if (!autoSync || !active) {
       return;
     }
     addDebugLog('INFO', 'auto-sync start', 'polling get-active-app every 2s');
@@ -465,7 +545,7 @@ export function useDeckView(): DeckViewController {
       clearInterval(timer);
       addDebugLog('INFO', 'auto-sync stop', 'polling stopped');
     };
-  }, [autoSync, addDebugLog, sendLogged]);
+  }, [autoSync, active, addDebugLog, sendLogged]);
 
   const headerLabel = useMemo(() => {
     if (manualSlug) {
@@ -491,6 +571,7 @@ export function useDeckView(): DeckViewController {
 
   const hasSlug = !!currentSlug && currentSlug !== 'unknown';
   const canImportActions = hasSlug && !loading;
+  const canEdit = hasSlug && !loading;
 
   const appDisplayName = useMemo(() => {
     if (manualSlug) {
@@ -509,9 +590,9 @@ export function useDeckView(): DeckViewController {
       return 'Focus a desktop app to load its deck, or pick an app manually.';
     }
     if (deckMissing) {
-      return `Couldn't fetch actions for “${appDisplayName}”. Check the connection and tap Import to retry.`;
+      return `Couldn't fetch actions for “${appDisplayName}”. Check the connection and tap Import actions to retry.`;
     }
-    return `No actions imported for “${appDisplayName}” yet. Tap Import to fetch the full list, then choose which actions to keep.`;
+    return `The “${appDisplayName}” deck is empty. Tap Edit to choose actions.`;
   }, [deckMissing, hasSlug, appDisplayName]);
 
   const visibleActions = useMemo(() => {
@@ -594,6 +675,7 @@ export function useDeckView(): DeckViewController {
     isFiltering,
     hasSlug,
     canImportActions,
+    canEdit,
     showSearch,
     displayActions,
     displayEmptyText,
@@ -609,6 +691,7 @@ export function useDeckView(): DeckViewController {
     toggleSelectAll,
     saveSelection,
     cancelSelection,
+    toggleEdit,
     fireAction,
     handleOrderChange,
     handleDragEnd,

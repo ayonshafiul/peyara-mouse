@@ -148,7 +148,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const setShowBottomBar = useGlobalStore(state => state.setShowBottomBar);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
-  const deck = useDeckView();
+  const deck = useDeckView(activeView === 'deck' && status === 'Connected');
 
   const serverUrl = useMemo(
     () => route?.params?.serverUrl ?? getValueFor(SERVER_URL_KEY) ?? null,

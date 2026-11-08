@@ -91,10 +91,9 @@ export default function PortraitContainer({
           selectionTotal={deck.importedActions.length}
           selectionVisibleIds={deck.importedVisibleIds}
           onToggleSelectAll={deck.toggleSelectAll}
-          onSaveSelection={deck.saveSelection}
           onCancelSelection={deck.cancelSelection}
-          onImport={deck.handleImport}
-          canImport={deck.canImportActions}
+          onToggleEdit={deck.toggleEdit}
+          canEdit={deck.canEdit}
           onSelectApp={() => deck.setPickerVisible(true)}
           onRefresh={deck.requestRefresh}
           autoSync={deck.autoSync}

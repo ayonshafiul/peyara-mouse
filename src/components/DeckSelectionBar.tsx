@@ -7,15 +7,15 @@ interface DeckSelectionBarProps {
   total: number;
   visibleIds: string[];
   onToggleAll: () => void;
-  onSave: () => void;
   onCancel: () => void;
 }
 
+// Shown while editing the deck. Saving happens through the toolbar's
+// Done button; Cancel leaves edit mode without saving.
 function DeckSelectionBar({
   total,
   visibleIds,
   onToggleAll,
-  onSave,
   onCancel,
 }: DeckSelectionBarProps) {
   const selected = useDeckSelectionStore(
@@ -26,7 +26,6 @@ function DeckSelectionBar({
       visibleIds.length > 0 && visibleIds.every(id => s.selected[id] === true),
   );
 
-  const canSave = selected > 0;
   return (
     <View style={styles.bar}>
       <TouchableOpacity
@@ -48,14 +47,6 @@ function DeckSelectionBar({
         activeOpacity={0.8}
         accessibilityLabel="Cancel selection">
         <Text style={styles.cancelText}>Cancel</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.saveBtn, !canSave && styles.saveDisabled]}
-        onPress={onSave}
-        disabled={!canSave}
-        activeOpacity={0.8}
-        accessibilityLabel="Save selection">
-        <Text style={styles.saveText}>Save</Text>
       </TouchableOpacity>
     </View>
   );
@@ -102,22 +93,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: colors.WHITE,
-    fontSize: 13,
-    fontFamily: 'Raleway-Bold',
-  },
-  saveBtn: {
-    height: 36,
-    paddingHorizontal: 18,
-    borderRadius: 18,
-    backgroundColor: colors.PRIM_ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveDisabled: {
-    opacity: 0.4,
-  },
-  saveText: {
-    color: colors.PRIM_BG,
     fontSize: 13,
     fontFamily: 'Raleway-Bold',
   },

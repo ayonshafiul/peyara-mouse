@@ -4,6 +4,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import colors from '../../constants/colors';
 import ColumnsStepper from '../ColumnsStepper';
 import DeckSelectionBar from '../DeckSelectionBar';
+import {useDeckSelectionStore} from '../../store/useDeckSelectionStore';
 
 interface DeckToolbarProps {
   headerLabel: string;
@@ -20,10 +21,9 @@ interface DeckToolbarProps {
   selectionTotal: number;
   selectionVisibleIds: string[];
   onToggleSelectAll: () => void;
-  onSaveSelection: () => void;
   onCancelSelection: () => void;
-  onImport: () => void;
-  canImport: boolean;
+  onToggleEdit: () => void;
+  canEdit: boolean;
   onSelectApp: () => void;
   onRefresh: () => void;
   autoSync: boolean;
@@ -45,15 +45,20 @@ export default function DeckToolbar({
   selectionTotal,
   selectionVisibleIds,
   onToggleSelectAll,
-  onSaveSelection,
   onCancelSelection,
-  onImport,
-  canImport,
+  onToggleEdit,
+  canEdit,
   onSelectApp,
   onRefresh,
   autoSync,
   onToggleAutoSync,
 }: DeckToolbarProps) {
+  const hasSelection = useDeckSelectionStore(
+    s => Object.keys(s.selected).length > 0,
+  );
+  // As "Done" the button saves the selection, which needs at least one
+  // action (Cancel leaves without saving).
+  const editEnabled = canEdit && (!selecting || hasSelection);
   return (
     <View style={styles.toolbar}>
       <View style={styles.topRow}>
@@ -96,13 +101,25 @@ export default function DeckToolbar({
       <View style={styles.headerText}>
         <View style={styles.titleRow}>
           <TouchableOpacity
-            style={[styles.importBtn, !canImport && styles.importBtnDisabled]}
-            onPress={onImport}
-            disabled={!canImport}
+            style={[
+              styles.editBtn,
+              selecting && styles.editBtnActive,
+              !editEnabled && styles.editBtnDisabled,
+            ]}
+            onPress={onToggleEdit}
+            disabled={!editEnabled}
             activeOpacity={0.8}
-            accessibilityLabel="Import actions"
-            accessibilityState={{disabled: !canImport}}>
-            <Text style={styles.importBtnText}>Import actions</Text>
+            accessibilityLabel={selecting ? 'Done editing deck' : 'Edit deck'}
+            accessibilityState={{disabled: !editEnabled, selected: selecting}}>
+            <MaterialIcons
+              name={selecting ? 'check' : 'edit'}
+              size={12}
+              color={selecting ? colors.PRIM_BG : colors.PRIM_ACCENT}
+            />
+            <Text
+              style={[styles.editBtnText, selecting && styles.editBtnTextActive]}>
+              {selecting ? 'Done' : 'Edit'}
+            </Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {headerLabel}
@@ -151,7 +168,6 @@ export default function DeckToolbar({
           total={selectionTotal}
           visibleIds={selectionVisibleIds}
           onToggleAll={onToggleSelectAll}
-          onSave={onSaveSelection}
           onCancel={onCancelSelection}
         />
       )}
@@ -205,7 +221,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  importBtn: {
+  editBtn: {
+    flexDirection: 'row',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -215,12 +233,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  importBtnText: {
+  editBtnActive: {
+    backgroundColor: colors.PRIM_ACCENT,
+  },
+  editBtnText: {
     color: colors.PRIM_ACCENT,
     fontSize: 11,
     fontFamily: 'Raleway-Bold',
   },
-  importBtnDisabled: {
+  editBtnTextActive: {
+    color: colors.PRIM_BG,
+  },
+  editBtnDisabled: {
     opacity: 0.4,
   },
   headerTitle: {
