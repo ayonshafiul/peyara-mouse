@@ -1,4 +1,4 @@
-import {Dimensions, StyleSheet, Switch, Text, View} from 'react-native';
+import {StyleSheet, Switch, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import React, {useEffect, useState} from 'react';
 import colors from '../constants/colors';
@@ -8,7 +8,6 @@ import {
   setBooleanValueFor,
   setValueFor,
 } from '../utils/storage';
-import Slider from '@react-native-community/slider';
 import {
   SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
   SETTINGS_TOUCHPAD_SENSITIVITY,
@@ -20,8 +19,11 @@ import {
 } from '../constants/settings';
 import Background from '../components/Background';
 import Orientation from 'react-native-orientation-locker';
-
-const width = Dimensions.get('window').width;
+import {
+  Stepper,
+  stepTune,
+  type TuneValues,
+} from '../components/QuickTuneRow';
 
 function SwitchCard({item}: {item: {label: string; key: string}}) {
   const [isOn, setIsOn] = useState(false);
@@ -49,95 +51,82 @@ function SwitchCard({item}: {item: {label: string; key: string}}) {
   );
 }
 
+// Same steps and bounds as the touchpad's quick-tune row.
+const tuneEntries: Array<{
+  key: keyof TuneValues;
+  label: string;
+  storageKey: string;
+  format: (v: number) => string;
+}> = [
+  {
+    key: 'touch',
+    label: 'Touchpad sensitivity',
+    storageKey: SETTINGS_TOUCHPAD_SENSITIVITY,
+    format: v => v.toFixed(2),
+  },
+  {
+    key: 'scroll',
+    label: 'Scroll sensitivity',
+    storageKey: SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
+    format: v => v.toFixed(2),
+  },
+  {
+    key: 'rate',
+    label: 'Touchpad response rate',
+    storageKey: SETTINGS_TOUCHPAD_RESPONSE_RATE,
+    format: v => `${v}ms`,
+  },
+];
+
 export default function SettingsScreen() {
-  const [touchSens, setTouchSens] = useState(DEFAULT_TOUCHPAD_SENSITIVITY);
-  const [scrollSens, setScrollSens] = useState(
-    DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
-  );
-  const [responseRate, setResponseRate] = useState(
-    DEFAULT_TOUCHPAD_RESPONSE_RATE,
-  );
+  const [tune, setTune] = useState<TuneValues>({
+    touch: DEFAULT_TOUCHPAD_SENSITIVITY,
+    scroll: DEFAULT_TOUCHPAD_SCROLL_SENSITIVITY,
+    rate: DEFAULT_TOUCHPAD_RESPONSE_RATE,
+  });
 
   useEffect(() => {
     Orientation.lockToPortrait();
     const ts = getValueFor(SETTINGS_TOUCHPAD_SENSITIVITY);
     const ss = getValueFor(SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY);
     const rr = getValueFor(SETTINGS_TOUCHPAD_RESPONSE_RATE);
-    if (ts) {
-      setTouchSens(Number(ts));
-    }
-    if (ss) {
-      setScrollSens(Number(ss));
-    }
-    if (rr) {
-      setResponseRate(Number(rr));
-    }
+    setTune(prev => ({
+      touch: ts ? Number(ts) : prev.touch,
+      scroll: ss ? Number(ss) : prev.scroll,
+      rate: rr ? Number(rr) : prev.rate,
+    }));
   }, []);
+
+  const step = (
+    entry: (typeof tuneEntries)[number],
+    direction: 1 | -1,
+  ) => {
+    const next = stepTune(entry.key, tune[entry.key], direction);
+    if (next === tune[entry.key]) {
+      return;
+    }
+    setTune(prev => ({...prev, [entry.key]: next}));
+    setValueFor(entry.storageKey, String(next));
+  };
 
   return (
     <Background>
       <SafeAreaView style={styles.safe}>
         <Text style={styles.settingsHeader}>Settings</Text>
-        <Text style={styles.switchCardText}>
-          Touchpad Sensitivity : {touchSens.toFixed(2)}
-        </Text>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0.05}
-            maximumValue={5}
-            step={0.05}
-            value={touchSens}
-            onValueChange={setTouchSens}
-            maximumTrackTintColor={colors.PRIM_ACCENT}
-            minimumTrackTintColor={colors.PRIM_ACCENT}
-            thumbTintColor={colors.PRIM_ACCENT}
-            onSlidingComplete={async value => {
-              setValueFor(SETTINGS_TOUCHPAD_SENSITIVITY, String(value));
-            }}
-          />
-        </View>
-        <Text style={styles.switchCardText}>
-          Scroll Sensitivity: {scrollSens.toFixed(2)}
-        </Text>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0.05}
-            maximumValue={2}
-            step={0.05}
-            value={scrollSens}
-            onValueChange={setScrollSens}
-            maximumTrackTintColor={colors.PRIM_ACCENT}
-            minimumTrackTintColor={colors.PRIM_ACCENT}
-            thumbTintColor={colors.PRIM_ACCENT}
-            onSlidingComplete={async value => {
-              setValueFor(
-                SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY,
-                String(value),
-              );
-            }}
-          />
-        </View>
-        <Text style={styles.switchCardText}>
-          Touchpad Response rate: {responseRate}ms
-        </Text>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.slider}
-            minimumValue={4}
-            maximumValue={120}
-            step={4}
-            value={responseRate}
-            onValueChange={setResponseRate}
-            maximumTrackTintColor={colors.PRIM_ACCENT}
-            minimumTrackTintColor={colors.PRIM_ACCENT}
-            thumbTintColor={colors.PRIM_ACCENT}
-            onSlidingComplete={async value => {
-              setValueFor(SETTINGS_TOUCHPAD_RESPONSE_RATE, String(value));
-            }}
-          />
-        </View>
+        {tuneEntries.map(entry => (
+          <View key={entry.key} style={styles.switchCardContainer}>
+            <Text style={styles.switchCardText}>{entry.label}</Text>
+            <View style={styles.stepper}>
+              <Stepper
+                label={entry.label}
+                display={entry.format(tune[entry.key])}
+                hideLabel
+                onDecrease={() => step(entry, -1)}
+                onIncrease={() => step(entry, 1)}
+              />
+            </View>
+          </View>
+        ))}
         {settingsData.map(item => (
           <SwitchCard key={item.key} item={item} />
         ))}
@@ -168,9 +157,8 @@ const styles = StyleSheet.create({
     marginVertical: 24,
     fontFamily: 'Raleway-Bold',
   },
-  sliderContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  stepper: {
+    width: 140,
+    flexDirection: 'row',
   },
-  slider: {width: width - 32, height: 40},
 });

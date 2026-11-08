@@ -1,6 +1,7 @@
 import {
   SETTINGS_INVERTED_SCROLL_KEY,
   SETTINGS_KEEP_AWAKE_KEY,
+  SETTINGS_POINTER_ACCELERATION_KEY,
   SETTINGS_TOUCHPAD_RESPONSE_RATE,
   DEFAULT_TOUCHPAD_RESPONSE_RATE,
 } from '../constants/settings';
@@ -19,6 +20,9 @@ export function initializeDefaultSettings(): void {
   if (typeof keepAwakeSettings !== 'boolean') {
     setBooleanValueFor(SETTINGS_KEEP_AWAKE_KEY, true);
   }
+  if (typeof getBooleanValueFor(SETTINGS_POINTER_ACCELERATION_KEY) !== 'boolean') {
+    setBooleanValueFor(SETTINGS_POINTER_ACCELERATION_KEY, false);
+  }
 }
 
 export function getInvertedScrollSettings(): boolean | undefined {
@@ -27,6 +31,11 @@ export function getInvertedScrollSettings(): boolean | undefined {
 
 export function getKeepAwakeSettings(): boolean | undefined {
   return getBooleanValueFor(SETTINGS_KEEP_AWAKE_KEY);
+}
+
+/** Pointer acceleration is opt-in: off unless enabled in Settings. */
+export function getPointerAccelerationSettings(): boolean {
+  return getBooleanValueFor(SETTINGS_POINTER_ACCELERATION_KEY) ?? false;
 }
 
 export function getResponseRateSettings(): number {

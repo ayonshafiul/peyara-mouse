@@ -29,6 +29,7 @@ import {fpPreview, plog, plogError} from '../utils/logger';
 import {
   getInvertedScrollSettings,
   getKeepAwakeSettings,
+  getPointerAccelerationSettings,
   getResponseRateSettings,
 } from '../utils/settings';
 import {
@@ -181,6 +182,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const tS = useRef(0);
   // scroll sensitivity
   const sS = useRef(0);
+  // opt-in pointer acceleration (Settings), off by default
+  const accelerationRef = useRef(false);
 
   const translationY = useSharedValue(0);
 
@@ -218,6 +221,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
         setTune(tuneValues);
         const invertedScroll = getInvertedScrollSettings();
         invertedScrollSV.value = invertedScroll ?? false;
+        accelerationRef.current = getPointerAccelerationSettings();
         const keepAwake = getKeepAwakeSettings();
         if (keepAwake) {
           activateKeepAwake();
@@ -528,8 +532,9 @@ export default function TouchpadScreen({navigation, route}: Props) {
   const sendPointerDelta = (dx: number, dy: number, speed: number) => {
     pendingLeftClick.current = false;
     const {w, h} = padSizeRef.current;
-    const gain =
-      tS.current * pointerAcceleration(smoothSpeed(speed, Date.now()));
+    const gain = accelerationRef.current
+      ? tS.current * pointerAcceleration(smoothSpeed(speed, Date.now()))
+      : tS.current;
     const x = dx * gain;
     const y = dy * gain * aspectNormY(w, h);
     sendPinnedMessage(

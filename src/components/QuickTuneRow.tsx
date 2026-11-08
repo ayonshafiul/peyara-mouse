@@ -13,18 +13,41 @@ interface QuickTuneRowProps {
   onChange: (values: TuneValues) => void;
 }
 
+/** Step size and bounds per tune value, shared with the Settings screen. */
+export const TUNE_LIMITS: Record<
+  keyof TuneValues,
+  {step: number; min: number; max: number}
+> = {
+  touch: {step: 0.05, min: 0.05, max: 5},
+  scroll: {step: 0.05, min: 0.05, max: 2},
+  rate: {step: 4, min: 4, max: 120},
+};
+
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-function Stepper({
+/** One step of `key` up (+1) or down (-1), clamped to its bounds. */
+export function stepTune(
+  key: keyof TuneValues,
+  value: number,
+  direction: 1 | -1,
+): number {
+  const {step, min, max} = TUNE_LIMITS[key];
+  return Math.min(max, Math.max(min, round2(value + direction * step)));
+}
+
+export function Stepper({
   label,
   display,
   onDecrease,
   onIncrease,
+  hideLabel = false,
 }: {
   label: string;
   display: string;
   onDecrease: () => void;
   onIncrease: () => void;
+  /** Show only the value; `label` still names the buttons for a11y. */
+  hideLabel?: boolean;
 }) {
   return (
     <View style={styles.group}>
@@ -36,7 +59,7 @@ function Stepper({
         <Text style={styles.stepBtnText}>-</Text>
       </TouchableOpacity>
       <Text style={styles.label} numberOfLines={1}>
-        {label} {display}
+        {hideLabel ? display : `${label} ${display}`}
       </Text>
       <TouchableOpacity
         style={styles.stepBtn}
@@ -50,8 +73,8 @@ function Stepper({
 }
 
 export default function QuickTuneRow({values, onChange}: QuickTuneRowProps) {
-  const tune = (key: keyof TuneValues, delta: number, min: number, max: number) => {
-    const next = Math.min(max, Math.max(min, round2(values[key] + delta)));
+  const tune = (key: keyof TuneValues, direction: 1 | -1) => {
+    const next = stepTune(key, values[key], direction);
     if (next !== values[key]) {
       onChange({...values, [key]: next});
     }
@@ -62,20 +85,20 @@ export default function QuickTuneRow({values, onChange}: QuickTuneRowProps) {
       <Stepper
         label="Touch"
         display={values.touch.toFixed(2)}
-        onDecrease={() => tune('touch', -0.05, 0.05, 5)}
-        onIncrease={() => tune('touch', 0.05, 0.05, 5)}
+        onDecrease={() => tune('touch', -1)}
+        onIncrease={() => tune('touch', 1)}
       />
       <Stepper
         label="Scroll"
         display={values.scroll.toFixed(2)}
-        onDecrease={() => tune('scroll', -0.05, 0.05, 2)}
-        onIncrease={() => tune('scroll', 0.05, 0.05, 2)}
+        onDecrease={() => tune('scroll', -1)}
+        onIncrease={() => tune('scroll', 1)}
       />
       <Stepper
         label="Rate"
         display={`${values.rate}ms`}
-        onDecrease={() => tune('rate', -4, 4, 120)}
-        onIncrease={() => tune('rate', 4, 4, 120)}
+        onDecrease={() => tune('rate', -1)}
+        onIncrease={() => tune('rate', 1)}
       />
     </View>
   );

@@ -1,4 +1,4 @@
-import {StyleSheet, View} from 'react-native';
+import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import React from 'react';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -14,7 +14,6 @@ import LandscapeDeckView from '../LandscapeDeckView';
 import CommonToolbar, {type ControlView} from '../toolbars/CommonToolbar';
 import TouchpadToolbar from '../toolbars/TouchpadToolbar';
 import DeckToolbar from '../toolbars/DeckToolbar';
-import RoundKey from '../RoundKey';
 import type {TuneValues} from '../QuickTuneRow';
 import type {DeckViewController} from '../../hooks/useDeckView';
 
@@ -74,7 +73,9 @@ export default function LandscapeContainer({
       style={[
         styles.container,
         {
-          paddingTop: Math.max(insets.top, 8),
+          // Tighter top edge while the toolbar is hidden: only the compact
+          // gear strip sits above the pad.
+          paddingTop: Math.max(insets.top, showTopControls ? 8 : 4),
           paddingLeft: Math.max(insets.left, 8),
           paddingRight: Math.max(insets.right, 8),
           paddingBottom: Math.max(insets.bottom, 8),
@@ -126,15 +127,19 @@ export default function LandscapeContainer({
         </>
       ) : (
         <View style={styles.hiddenBar}>
-          <RoundKey
-            containerStyle={styles.gearKey}
-            onPress={onShowControls}>
-            <MaterialIcons name="settings" size={20} color={colors.WHITE} />
-          </RoundKey>
+          <TouchableOpacity
+            style={styles.gearKey}
+            onPress={onShowControls}
+            hitSlop={10}
+            activeOpacity={0.7}
+            accessibilityLabel="Show controls">
+            <MaterialIcons name="settings" size={16} color={colors.WHITE} />
+          </TouchableOpacity>
         </View>
       )}
       {hiddenInput}
-      <View style={styles.content}>
+      <View
+        style={[styles.content, !showTopControls && styles.contentCompact]}>
         {activeView === 'touchpad' ? (
           <LandscapeTouchpadView
             composed={composed}
@@ -178,16 +183,21 @@ const styles = StyleSheet.create({
   hiddenBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   gearKey: {
-    width: 38,
-    height: 38,
-    margin: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   content: {
     flex: 1,
     width: '100%',
     marginTop: 8,
+  },
+  contentCompact: {
+    marginTop: 4,
   },
 });

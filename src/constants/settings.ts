@@ -29,6 +29,8 @@ export const SETTINGS_TOUCHPAD_SCROLL_SENSITIVITY = 'scrollsensitivity';
 
 export const SETTINGS_TOUCHPAD_RESPONSE_RATE = 'responserate';
 
+export const SETTINGS_POINTER_ACCELERATION_KEY = 'pointeracceleration';
+
 export const settingsData = [
   {
     label: 'Inverted scroll',
@@ -37,6 +39,10 @@ export const settingsData = [
   {
     label: 'Keep screen awake while connected',
     key: SETTINGS_KEEP_AWAKE_KEY,
+  },
+  {
+    label: 'Pointer acceleration',
+    key: SETTINGS_POINTER_ACCELERATION_KEY,
   },
 ];
 
