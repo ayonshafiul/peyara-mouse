@@ -51,6 +51,11 @@ import {
 } from '../native/PeyaraSocket';
 import useInterval from '../hooks/useInterval';
 import {getValueFor, setValueFor} from '../utils/storage';
+import {
+  aspectNormY,
+  createSpeedFilter,
+  pointerAcceleration,
+} from '../utils/pointer';
 import KeyboardModal from '../modals/KeyboardModal';
 import ClipboardModal from '../modals/ClipboardModal';
 import type {BottomSheetModal as BottomSheetModalType} from '@gorhom/bottom-sheet';
@@ -161,11 +166,6 @@ export default function TouchpadScreen({navigation, route}: Props) {
   // Mirrors the native connection state (the module owns reconnecting).
   const connectedRef = useRef(false);
 
-  // UI-thread accumulators: exact per-tick deltas (float px).
-  const accX = useSharedValue(0);
-  const accY = useSharedValue(0);
-  const accSX = useSharedValue(0);
-  const accSY = useSharedValue(0);
   // previous cumulative translations per channel
   const prevTX = useSharedValue(0);
   const prevTY = useSharedValue(0);
@@ -458,6 +458,8 @@ export default function TouchpadScreen({navigation, route}: Props) {
   // The factor is capped: in landscape the pad is very wide and short, so
   // strict width/height equalization would over-amplify vertical jitter.
   const padSizeRef = useRef({w: 0, h: 0});
+  // smoothed finger speed feeding the pointer acceleration curve
+  const smoothSpeed = useRef(createSpeedFilter()).current;
 
   const handleTouchpadLayout = (w: number, h: number) => {
     padSizeRef.current = {w, h};
@@ -479,76 +481,60 @@ export default function TouchpadScreen({navigation, route}: Props) {
         }
       }
 
-      // Aspect compensation so pointer travel is uniform on both axes.
-      // Capped: extreme aspects (wide-short landscape pad) would otherwise
-      // push vertical gain into jitter-amplifying territory.
-      const {w: padW, h: padH} = padSizeRef.current;
-      const normY =
-        padW > 0 && padH > 0
-          ? Math.min(1.5, Math.max(0.5, padW / padH))
-          : 1;
-
-      if (isDraggingRef.current) {
-        pendingLeftClick.current = false;
-        const dx = accX.value;
-        const dy = accY.value;
-        if (dx !== 0 || dy !== 0) {
-          sendPinnedMessage({
-            type: 'windowdragupdate',
-            x: dx * tS.current,
-            y: dy * tS.current * normY,
-          });
-          accX.value = 0;
-          accY.value = 0;
-        }
-      } else if (accX.value !== 0 || accY.value !== 0) {
-        pendingLeftClick.current = false;
-        sendPinnedMessage({
-          type: 'coordinates',
-          x: accX.value * tS.current,
-          y: accY.value * tS.current * normY,
-        });
-        accX.value = 0;
-        accY.value = 0;
-      }
-
       // Held-displaced wheel thumb auto-repeat: pulling the thumb aside
       // and holding it keeps emitting small scrolls in that direction
-      // every send tick until release.
+      // every tick until release.
       if (scrollHeldRef.current) {
         const held = translationY.value;
         if (Math.abs(held) >= SCROLL_REPEAT_DEADZONE) {
           const dir = settingsData?.invertedScroll ? 1 : -1;
-          accSY.value +=
-            (dir * held * SCROLL_REPEAT_PER_TICK) / MAX_TRANSLATE_Y;
+          sendScrollDelta(
+            0,
+            (dir * held * SCROLL_REPEAT_PER_TICK) / MAX_TRANSLATE_Y,
+          );
         }
-      }
-
-      if (accSX.value !== 0 || accSY.value !== 0) {
-        sendPinnedMessage({
-          type: 'scroll',
-          x: accSX.value * sS.current,
-          y: accSY.value * sS.current,
-        });
-        accSX.value = 0;
-        accSY.value = 0;
       }
     },
     Number(tune.rate),
   );
 
+  // Pointer and scroll deltas go out once per touch event, straight from
+  // the gestures (runOnJS preserves order, so a drag start always precedes
+  // its first update). Batching them on a JS timer lost motion — a JS-side
+  // shared-value reset is applied asynchronously and wiped deltas the UI
+  // thread added in between — and the timer's period beat against the
+  // touch rate, turning steady finger motion into uneven steps.
+  const sendPointerDelta = (dx: number, dy: number, speed: number) => {
+    pendingLeftClick.current = false;
+    const {w, h} = padSizeRef.current;
+    const gain =
+      tS.current * pointerAcceleration(smoothSpeed(speed, Date.now()));
+    const x = dx * gain;
+    const y = dy * gain * aspectNormY(w, h);
+    sendPinnedMessage(
+      isDraggingRef.current
+        ? {type: 'windowdragupdate', x, y}
+        : {type: 'coordinates', x, y},
+    );
+  };
+  const sendScrollDelta = (dx: number, dy: number) => {
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+    sendPinnedMessage({
+      type: 'scroll',
+      x: dx * sS.current,
+      y: dy * sS.current,
+    });
+  };
+
   const sendWindowDragStart = () => {
     isDraggingRef.current = true;
-    // drop any pre-drag residue so the drag starts exactly at the finger
-    accX.value = 0;
-    accY.value = 0;
     plog('Touchpad', 'send windowdragstart');
     sendPinnedMessage({type: 'windowdragstart'});
   };
   const sendWindowDragEnd = () => {
     isDraggingRef.current = false;
-    accX.value = 0;
-    accY.value = 0;
     prevTX.value = 0;
     prevTY.value = 0;
     // a drag separates taps: the next quick tap must not read as the
@@ -680,8 +666,9 @@ export default function TouchpadScreen({navigation, route}: Props) {
       const dy = e.translationY - prevTY.value;
       prevTX.value = e.translationX;
       prevTY.value = e.translationY;
-      accX.value += dx;
-      accY.value += dy;
+      if (dx !== 0 || dy !== 0) {
+        runOnJS(sendPointerDelta)(dx, dy, Math.hypot(e.velocityX, e.velocityY));
+      }
     })
     .onEnd(() => {
       prevTX.value = 0;
@@ -713,8 +700,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       if (invertedScrollSV.value) {
         dy = -dy;
       }
-      accSX.value += dx;
-      accSY.value += dy;
+      runOnJS(sendScrollDelta)(dx, dy);
     })
     .onEnd(() => {
       prevSX.value = 0;
@@ -743,7 +729,7 @@ export default function TouchpadScreen({navigation, route}: Props) {
       const dy = translationY.value - prevWheelY.current;
       prevWheelY.current = translationY.value;
       const y = settingsData?.invertedScroll ? dy : dy * -1;
-      accSY.value += y;
+      sendScrollDelta(0, y);
     })
     .onEnd(() => {
       prevWheelY.current = 0;

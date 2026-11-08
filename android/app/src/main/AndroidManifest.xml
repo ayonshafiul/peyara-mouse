@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- low-latency Wi-Fi lock while the touchpad socket is open -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature
     android:name="android.hardware.camera"

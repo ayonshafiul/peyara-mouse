@@ -13,6 +13,8 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.io.IOException
+import java.net.InetAddress
+import java.net.Socket
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.CertificateException
@@ -20,8 +22,12 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.SystemClock
 
 /**
@@ -71,6 +77,37 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
   @Volatile private var openedAtMs = 0L
   private var reconnectTask: ScheduledFuture<*>? = null
 
+  // Keeps the Wi-Fi radio out of power-save while the socket is open: in
+  // power-save the radio wakes only periodically, delivering pointer frames
+  // in bursts. The low-latency mode only takes effect while the app is in
+  // the foreground with the screen on — exactly when the touchpad is used.
+  private val wifiLock: WifiManager.WifiLock? by lazy {
+    val wifi = reactApplicationContext.applicationContext
+      .getSystemService(Context.WIFI_SERVICE) as? WifiManager
+    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+    } else {
+      @Suppress("DEPRECATION")
+      WifiManager.WIFI_MODE_FULL_HIGH_PERF
+    }
+    wifi?.createWifiLock(mode, "peyara:touchpad")?.apply {
+      setReferenceCounted(false)
+    }
+  }
+
+  private fun holdWifiLock(hold: Boolean) {
+    try {
+      val lock = wifiLock ?: return
+      if (hold && !lock.isHeld) {
+        lock.acquire()
+      } else if (!hold && lock.isHeld) {
+        lock.release()
+      }
+    } catch (_: Exception) {
+      // best effort: smoothness degrades, input still works
+    }
+  }
+
   override fun getName() = NAME
 
   // Required stubs for the RN event-emitter pattern.
@@ -111,6 +148,7 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
     val sslContext = SSLContext.getInstance("TLS")
     sslContext.init(null, arrayOf(trustManager), SecureRandom())
     return OkHttpClient.Builder()
+      .socketFactory(NoDelaySocketFactory())
       .sslSocketFactory(sslContext.socketFactory, trustManager)
       // No permissive hostname verifier: the default OkHostnameVerifier
       // validates the IP SANs normally, and the leaf-hash pin above is the
@@ -252,6 +290,7 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
         }
         attempts = 0
         openedAtMs = SystemClock.elapsedRealtime()
+        holdWifiLock(true)
         // Pairing handshake first: hello precedes every other frame.
         // The code is validated 8-hex, so interpolation is safe.
         try {
@@ -289,6 +328,7 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
       return
     }
     webSocket = null
+    holdWifiLock(false)
     val opened = openedAtMs
     openedAtMs = 0L
     if (opened != 0L &&
@@ -331,6 +371,7 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
   private fun closeSilently() {
     val ws = webSocket
     webSocket = null
+    holdWifiLock(false)
     try {
       ws?.close(1000, "client disconnect")
     } catch (_: Exception) {
@@ -344,6 +385,40 @@ class PeyaraSocketModule(reactContext: ReactApplicationContext) :
     closeSilently()
     scheduler.shutdownNow()
   }
+}
+
+/**
+ * Plain-socket factory with Nagle's algorithm disabled. Pointer frames are
+ * tiny and frequent; with Nagle on, each frame waits for the previous one to
+ * be ACKed — and the desktop delays its ACKs — so motion arrives in bursts.
+ * OkHttp layers TLS on top of these raw sockets, so the option carries over.
+ */
+private class NoDelaySocketFactory : SocketFactory() {
+  private val delegate: SocketFactory = getDefault()
+
+  private fun Socket.noDelay(): Socket = apply { tcpNoDelay = true }
+
+  override fun createSocket(): Socket = delegate.createSocket().noDelay()
+
+  override fun createSocket(host: String, port: Int): Socket =
+    delegate.createSocket(host, port).noDelay()
+
+  override fun createSocket(
+    host: String,
+    port: Int,
+    localHost: InetAddress,
+    localPort: Int,
+  ): Socket = delegate.createSocket(host, port, localHost, localPort).noDelay()
+
+  override fun createSocket(host: InetAddress, port: Int): Socket =
+    delegate.createSocket(host, port).noDelay()
+
+  override fun createSocket(
+    address: InetAddress,
+    port: Int,
+    localAddress: InetAddress,
+    localPort: Int,
+  ): Socket = delegate.createSocket(address, port, localAddress, localPort).noDelay()
 }
 
 /**
